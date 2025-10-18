@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from unittest.mock import patch, MagicMock
 
-from mcp_conductor.detector.changepoint import ChangePointDetector
+from mcp_conductor.detector.generic.changepoints import ChangePointDetector
 
 
 class TestChangePointDetector(unittest.TestCase):

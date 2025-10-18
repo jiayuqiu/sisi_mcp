@@ -2,3 +2,5 @@ pandas
 numpy
 ruptures
 pytest
+requests
+python-dotenv

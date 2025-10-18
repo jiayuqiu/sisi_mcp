@@ -1,9 +1,8 @@
-import pandas as pd
 import numpy as np
 import ruptures as rpt
-from typing import Dict, Any, List, Optional, Tuple, Union
+from typing import Dict, Any, List, Union
 
-from mcp_conductor.detector.base_detector import BaseDetector
+from mcp_conductor.detector.generic.base_detector import BaseDetector
 
 
 class ChangePointDetector(BaseDetector):
