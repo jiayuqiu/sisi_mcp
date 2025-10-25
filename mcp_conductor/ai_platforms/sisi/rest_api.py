@@ -58,7 +58,7 @@ class SISIClient(BaseAIClient):
             "messages": [
                 {
                     "role": "user",
-                    "content": question
+                    "content": question + "请不要过多扩展。"
                 }
             ],
             "max_tokens": 1024,

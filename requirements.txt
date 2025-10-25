@@ -4,3 +4,5 @@ ruptures
 pytest
 requests
 python-dotenv
+mcp>=1.1.0
+flask
