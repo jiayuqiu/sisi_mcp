@@ -30,8 +30,8 @@ def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
     detection_records = []
     for _, row in changepoints_result.iterrows():
         # weather, news
-        changepoint_date_id = row['日期']
-        pipe_name = row['通道名称']
+        changepoint_date_id = row['date_id']
+        pipe_name = row['pipe_name']
         weather_news_question = WEB_SEARCH_WEATHER_NEWS.format(
             date_id = changepoint_date_id,
             pipe_name = pipe_name
@@ -69,7 +69,7 @@ def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
 
 
 def trigger_traffic_detect(run_date: str, pipe_name: str) -> str:
-    changepoints_result: dict[str, pd.DataFrame] = pipe_detect_engine(run_date)
+    changepoints_result: dict[str, pd.DataFrame] = pipe_detect_engine(run_date, pipe_name)
     changepoints = changepoints_result[pipe_name]
     detection_text: str = analyze_congestion(pipe_name=pipe_name, changepoints=changepoints)
     return detection_text
@@ -83,13 +83,9 @@ def run_app():
 
     run_date = args.__getattribute__("run_date")
     pipe_name = args.__getattribute__("pipe")
-    changepoints_result: dict[str, pd.DataFrame] = pipe_detect_engine(run_date)
+    changepoints_result: dict[str, pd.DataFrame] = pipe_detect_engine(run_date, pipe_name)
     changepoints = changepoints_result[pipe_name]
     analyze_congestion(pipe_name=pipe_name, changepoints=changepoints)
-    # for _k, _v in changepoints_result.items():
-    #     analyze_congestion(
-    #         pipe_name=_k, changepoints=_v
-    #     )
 
 
 if __name__ == "__main__":
