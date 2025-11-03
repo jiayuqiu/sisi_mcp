@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from mcp_conductor.detector.generic.changepoints import ChangePointDetector
 
 
-def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 3, day: int = 0) -> dict[str, pd.DataFrame]:
+def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int = 0) -> dict[str, pd.DataFrame]:
     """
     TODO: currently, this function is just for demonstration purposes. will optimize later.
     """
@@ -29,11 +29,15 @@ def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 3, day: int =
 
     # df = pd.concat(df_list, ignore_index=True)
     # load data from sqlite
-    db_path = Path("/home/jerry/codebase/sisimcp/data/sisi.sqlite")
+    db_path = Path("data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
     df = pd.read_sql(
-        "SELECT * FROM ship_cnt_in_pipe", con=engine
+        f"SELECT * FROM ship_cnt_in_pipe WHERE pipe_name = '{pipe_name}'", con=engine
     )
+    if df.shape[0] == 0:
+        raise ValueError(
+            f"For {run_date}, {pipe_name} there is no pipe ship cnt data."
+        )
 
     # base on run_date find out the records in monitor time window
     # group by strait name
@@ -53,7 +57,7 @@ def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 3, day: int =
             continue
 
         # feed the ship cnt into detector, will get changepoints as expected.
-        result = detector.detect(group["ship_cnt"].tolist())
+        result = detector.detect(group["ship_cnt"].tolist(), pipe_name=pipe_name)
         changepoints_df = group.iloc[result["change_points"]]
         all_changepoints_result[pipe_name] = changepoints_df
     return all_changepoints_result
