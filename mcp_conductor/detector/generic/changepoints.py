@@ -12,7 +12,7 @@ class ChangePointDetector(BaseDetector):
         
         Args:
             config: Configuration dictionary with parameters:
-                - method: Detection method ('bic', 'pelt', 'binseg', 'bottomup', 'window'), default method: pelt
+                - method: Detection method ('bic', 'pelt', 'binseg', 'bottomup', 'window'), default method: sisi
                 - model: Cost model ('l1', 'l2', 'rbf', etc.)
                 - min_size: Minimum segment size (default: 3)
                 - penalty: Penalty term for BIC/PELT (default: 'default')
@@ -21,7 +21,7 @@ class ChangePointDetector(BaseDetector):
                 - width: Window width for window-based method (default: 5)
         """
         super().__init__(config)
-        self.method = self.config.get('method', 'pelt')
+        self.method = self.config.get('method', 'sisi')
         self.model = self.config.get('model', 'l2')
         self.min_size = self.config.get('min_size', 3)
         self.penalty = self.config.get('penalty', 'default')
@@ -30,7 +30,7 @@ class ChangePointDetector(BaseDetector):
         self.width = self.config.get('width', 5)
         self.algo = None
 
-    def detect(self, value: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+    def detect(self, value: Union[List[float], np.ndarray], pipe_name: str | None = None) -> Dict[str, Any]:
         """
         Detect change points in a time series.
         
@@ -51,6 +51,8 @@ class ChangePointDetector(BaseDetector):
         # Select and run the appropriate algorithm
         if self.method == 'bic':
             change_points = self._detect_bic(signal)
+        elif self.method == "sisi":
+            change_points = self._detect_sisi(signal, pipe_name)
         elif self.method == 'pelt':
             change_points = self._detect_pelt(signal)
         elif self.method == 'binseg':
@@ -62,7 +64,49 @@ class ChangePointDetector(BaseDetector):
         else:
             return {'change_points': [], 'status': 'error', 'message': f'Unknown method: {self.method}'}
         return {'change_points': change_points, 'status': 'success', 'method': self.method, 'message': ''}
+
+    def _detect_sisi(self, signal: np.ndarray, pipe_name: str) -> List[int]:
+        """
+        Detect change points using SISI original algorithm.
+        
+        Args:
+            signal: The time series signal to analyze
             
+        Returns:
+            List[int]: Indices of detected change points
+        """
+        THRESHOLD_DICT: dict = {
+            "曼德海峡": {
+                "min_alert_cnt": 13,
+                "max_alert_cnt": 41
+            }
+        }
+
+        # allow overriding thresholds via detector config
+        min_cnt = self.config.get("min_alert_cnt", THRESHOLD_DICT[pipe_name]["min_alert_cnt"])
+        max_cnt = self.config.get("max_alert_cnt", THRESHOLD_DICT[pipe_name]["max_alert_cnt"])
+
+        # ensure signal is a 1-d numpy array
+        arr = np.asarray(signal).ravel()
+
+        indices: List[int] = []
+        for idx, val in enumerate(arr):
+            # skip missing values
+            try:
+                if val is None or (isinstance(val, float) and np.isnan(val)):
+                    continue
+            except Exception:
+                # if np.isnan fails for non-numeric, attempt numeric cast
+                try:
+                    val = float(val)
+                except Exception:
+                    continue
+
+            # collect index when value is below min or above max
+            if val < min_cnt or val > max_cnt:
+                indices.append(int(idx))
+
+        return indices
     
     def _detect_bic(self, signal: np.ndarray) -> List[int]:
         """

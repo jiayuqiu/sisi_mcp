@@ -4,3 +4,8 @@ ruptures
 pytest
 requests
 python-dotenv
+mcp>=1.1.0
+fastmcp
+matplotlib
+flask
+sqlalchemy==1.4.50
