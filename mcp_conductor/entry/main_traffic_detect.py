@@ -9,10 +9,10 @@ import json
 
 import pandas as pd
 
-from mcp_conductor.ai_platforms.deepseek.rest_api import DeepSeekClient
-from mcp_conductor.ai_platforms.sisi.rest_api import SISIClient
+from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
+from mcp_conductor.resources.sisi.APIs.LLM import SISIClient
 from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
-from mcp_conductor.ai_platforms.tools import remove_think_tag
+from mcp_conductor.resources.tools import remove_think_tag
 from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
 
 
