@@ -8,4 +8,4 @@ mcp>=1.1.0
 fastmcp
 matplotlib
 flask
-sqlalchemy
+sqlalchemy==1.4.50

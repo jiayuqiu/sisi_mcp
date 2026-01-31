@@ -9,6 +9,7 @@ from mcp_conductor.detector.generic.changepoints import ChangePointDetector
 
 
 def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int = 0) -> dict[str, pd.DataFrame]:
+def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int = 0) -> dict[str, pd.DataFrame]:
     """
     TODO: currently, this function is just for demonstration purposes. will optimize later.
     """
@@ -29,7 +30,7 @@ def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int =
 
     # df = pd.concat(df_list, ignore_index=True)
     # load data from sqlite
-    db_path = Path("./data/sisi.sqlite")
+    db_path = Path("/home/jerry/codebase/sisimcp/data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
     df = pd.read_sql(
         f"SELECT * FROM ship_cnt_in_pipe WHERE pipe_name = '{pipe_name}'", con=engine
