@@ -9,7 +9,6 @@ from mcp_conductor.detector.generic.changepoints import ChangePointDetector
 
 
 def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int = 0) -> dict[str, pd.DataFrame]:
-def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int = 0) -> dict[str, pd.DataFrame]:
     """
     TODO: currently, this function is just for demonstration purposes. will optimize later.
     """
