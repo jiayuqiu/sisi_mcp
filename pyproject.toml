@@ -1,0 +1,22 @@
+[project]
+name = "sisimcp"
+version = "0.1.0"
+dependencies = [
+    "pandas",
+    "numpy",
+    "ruptures",
+    "pytest",
+    "requests",
+    "python-dotenv",
+    "mcp>=1.1.0",
+    "fastmcp",
+    "matplotlib",
+    "flask",
+    "sqlalchemy",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.19.0",
+]

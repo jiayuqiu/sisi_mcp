@@ -30,7 +30,7 @@ class ChangePointDetector(BaseDetector):
         self.width = self.config.get('width', 5)
         self.algo = None
 
-    def detect(self, value: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+    def detect(self, value: Union[List[float], np.ndarray], pipe_name: str | None = None) -> Dict[str, Any]:
         """
         Detect change points in a time series.
         
@@ -52,7 +52,7 @@ class ChangePointDetector(BaseDetector):
         if self.method == 'bic':
             change_points = self._detect_bic(signal)
         elif self.method == "sisi":
-            change_points = self._detect_sisi(signal)
+            change_points = self._detect_sisi(signal, pipe_name)
         elif self.method == 'pelt':
             change_points = self._detect_pelt(signal)
         elif self.method == 'binseg':
@@ -65,7 +65,7 @@ class ChangePointDetector(BaseDetector):
             return {'change_points': [], 'status': 'error', 'message': f'Unknown method: {self.method}'}
         return {'change_points': change_points, 'status': 'success', 'method': self.method, 'message': ''}
 
-    def _detect_sisi(self, signal: np.ndarray) -> List[int]:
+    def _detect_sisi(self, signal: np.ndarray, pipe_name: str) -> List[int]:
         """
         Detect change points using SISI original algorithm.
         
@@ -76,13 +76,15 @@ class ChangePointDetector(BaseDetector):
             List[int]: Indices of detected change points
         """
         THRESHOLD_DICT: dict = {
-            "min_alert_cnt": 3,
-            "max_alert_cnt": 13
+            "曼德海峡": {
+                "min_alert_cnt": 13,
+                "max_alert_cnt": 41
+            }
         }
 
         # allow overriding thresholds via detector config
-        min_cnt = self.config.get("min_alert_cnt", THRESHOLD_DICT["min_alert_cnt"])
-        max_cnt = self.config.get("max_alert_cnt", THRESHOLD_DICT["max_alert_cnt"])
+        min_cnt = self.config.get("min_alert_cnt", THRESHOLD_DICT[pipe_name]["min_alert_cnt"])
+        max_cnt = self.config.get("max_alert_cnt", THRESHOLD_DICT[pipe_name]["max_alert_cnt"])
 
         # ensure signal is a 1-d numpy array
         arr = np.asarray(signal).ravel()

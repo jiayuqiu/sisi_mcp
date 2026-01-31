@@ -17,7 +17,7 @@ def _safe_filename(s: str) -> str:
     return s
 
 
-def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int = 0, output_dir: str = "./tmp/images") -> str:
+def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 1, day: int = 0, output_dir: str = "./tmp/images") -> str:
     """
     Reads pipe data, detects changepoints, and generates a line chart of ship counts,
     highlighting congestion periods.
@@ -49,7 +49,7 @@ def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int
     # df = pd.concat(df_list, ignore_index=True)
     # df = pd.concat(df_list, ignore_index=True)
     # load data from sqlite
-    db_path = Path("/home/jerry/codebase/sisimcp/data/sisi.sqlite")
+    db_path = Path("./data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
     df = pd.read_sql(
         "SELECT * FROM ship_cnt_in_pipe", con=engine
@@ -76,7 +76,7 @@ def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int
     ship_counts = pipe_df["ship_cnt"].tolist()
     
     # Detect changepoints
-    result = detector.detect(ship_counts)
+    result = detector.detect(ship_counts, pipe_name)
     changepoints = result["change_points"]
 
     # Create plot
@@ -109,6 +109,8 @@ def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     safe_name = _safe_filename(pipe_name)
+
+    output_dir = "C:\\Users\\qiuji\\Downloads"
     output_path = os.path.join(output_dir, f"congestion_plot_{safe_name}_{timestamp}.png")
     plt.savefig(output_path)
     plt.close()
