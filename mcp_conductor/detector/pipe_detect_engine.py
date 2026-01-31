@@ -30,11 +30,12 @@ def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int =
 
     # df = pd.concat(df_list, ignore_index=True)
     # load data from sqlite
-    db_path = Path("/home/jerry/codebase/sisimcp/data/sisi.sqlite")
+    db_path = Path("./data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
     df = pd.read_sql(
         f"SELECT * FROM ship_cnt_in_pipe WHERE pipe_name = '{pipe_name}'", con=engine
     )
+
     if df.shape[0] == 0:
         raise ValueError(
             f"For {run_date}, {pipe_name} there is no pipe ship cnt data."

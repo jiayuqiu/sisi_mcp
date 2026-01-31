@@ -49,7 +49,7 @@ def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int
     # df = pd.concat(df_list, ignore_index=True)
     # df = pd.concat(df_list, ignore_index=True)
     # load data from sqlite
-    db_path = Path("/home/jerry/codebase/sisimcp/data/sisi.sqlite")
+    db_path = Path("data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
     df = pd.read_sql(
         "SELECT * FROM ship_cnt_in_pipe", con=engine
