@@ -1,0 +1,69 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Detect Traffic Congestion",
+    "description": "检测指定日期和通道是否发生交通异常",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8002"
+    }
+  ],
+  "paths": {
+    "/api/detect_congestion": {
+      "post": {
+        "summary": "检测交通异常",
+        "description": "检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡",
+        "operationId": "detectCongestion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "description": "用中文提出的问题，包含年月和通道名称",
+                    "example": "2023年12月 曼德海峡是否发生异常？"
+                  }
+                },
+                "required": ["question"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "检测结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "string"
+                    },
+                    "run_date": {
+                      "type": "string"
+                    },
+                    "pipe_name": {
+                      "type": "string"
+                    },
+                    "has_congestion": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -79,6 +79,14 @@ class ChangePointDetector(BaseDetector):
             "曼德海峡": {
                 "min_alert_cnt": 13,
                 "max_alert_cnt": 41
+            },
+            "马六甲海峡": {
+                "min_alert_cnt": 13,
+                "max_alert_cnt": 41
+            },
+            "马六甲": {
+                "min_alert_cnt": 13,
+                "max_alert_cnt": 41
             }
         }
 

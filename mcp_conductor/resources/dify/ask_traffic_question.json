@@ -1,0 +1,67 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ask Traffic Question",
+    "description": "分析交通异常原因，结合天气、新闻等信息",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8002"
+    }
+  ],
+  "paths": {
+    "/api/ask_question": {
+      "post": {
+        "summary": "分析交通异常原因",
+        "description": "深度分析交通异常原因，结合天气、新闻等信息给出详细解释",
+        "operationId": "askQuestion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "description": "用中文提出的问题，包含年月、通道名称和分析请求",
+                    "example": "请分析2023年12月曼德海峡发生异常的原因"
+                  }
+                },
+                "required": ["question"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "详细分析结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "string",
+                      "description": "Markdown格式的分析结果"
+                    },
+                    "run_date": {
+                      "type": "string"
+                    },
+                    "pipe_name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
