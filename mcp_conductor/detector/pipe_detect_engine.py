@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 from datetime import datetime, timedelta
 import glob
 import os
@@ -6,6 +7,8 @@ from pathlib import Path
 from sqlalchemy import create_engine
 
 from mcp_conductor.detector.generic.changepoints import ChangePointDetector
+
+logger = logging.getLogger(__name__)
 
 
 def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int = 0) -> dict[str, pd.DataFrame]:
@@ -19,21 +22,14 @@ def pipe_detect_engine(run_date: str, pipe_name: str, month: int = 1, day: int =
     }
     detector = ChangePointDetector(config)
 
-    # # load data from dummy folder
-    # dummy_data_folder = "/home/jerry/codebase/sisimcp/data/dummy"
-    # dummy_data_files = glob.glob(os.path.join(dummy_data_folder, "*.csv"))
-    # df_list = []
-    # for _fn in dummy_data_files:
-    #     _df = pd.read_csv(_fn)
-    #     df_list.append(_df)
-
-    # df = pd.concat(df_list, ignore_index=True)
     # load data from sqlite
     db_path = Path("./data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
-    df = pd.read_sql(
-        f"SELECT * FROM ship_cnt_in_pipe WHERE pipe_name = '{pipe_name}'", con=engine
+    get_ship_cnt_sql = f"SELECT * FROM ship_cnt_in_pipe WHERE pipe_name = '{pipe_name}'"
+    df = pd.read_sql(  # TODO: optimize the where condition
+        get_ship_cnt_sql, con=engine
     )
+    logger.info("SQL: %s", get_ship_cnt_sql)
 
     if df.shape[0] == 0:
         raise ValueError(

@@ -49,17 +49,21 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
     if not question:
         return None, None
 
-    # Find year and month
+    # Find year and month (optional day)
     ym_match = re.search(r"(\d{4})\s*年\s*(\d{1,2})\s*月", question)
     if not ym_match:
-        ym_match = re.search(r"(\d{4})[-/](\d{1,2})", question)
+        ym_match = re.search(r"(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?", question)
 
     run_date = None
     if ym_match:
         year = int(ym_match.group(1))
         month = int(ym_match.group(2))
-        last_day = calendar.monthrange(year, month)[1]
-        run_date = f"{year:04d}-{month:02d}-{last_day:02d}"
+        day = ym_match.group(3) if ym_match.lastindex and ym_match.lastindex >= 3 else None
+        if day:
+            run_date = f"{year:04d}-{month:02d}-{int(day):02d}"
+        else:
+            last_day = calendar.monthrange(year, month)[1]
+            run_date = f"{year:04d}-{month:02d}-{last_day:02d}"
 
     # Extract pipe name
     pipe = None
@@ -86,11 +90,11 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
     return run_date, pipe
 
 
-@app.post("/api/detect_congestion")
-async def detect_congestion(request: QuestionRequest):
+@app.post("/api/detect_anomaly")
+async def detect_anomaly(request: QuestionRequest):
     """Detect traffic congestion for specified date and channel"""
     try:
-        logger.info(f"Detect congestion request: {request.question}")
+        logger.info(f"Detect anomaly request: {request.question}")
 
         # Parse the question
         run_date, pipe_name = parse_question(request.question)
@@ -120,22 +124,23 @@ async def detect_congestion(request: QuestionRequest):
             "result": result_text,
             "run_date": run_date,
             "pipe_name": pipe_name,
-            "has_congestion": len(changepoints_result) > 0
+            "if_anomaly": changepoints_result[pipe_name].shape[0] > 0
         }
 
     except Exception as e:
-        logger.error(f"Error in detect_congestion: {e}", exc_info=True)
+        logger.error(f"Error in detect_anomaly: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/ask_question")
-async def ask_question(request: QuestionRequest):
+@app.post("/api/analyze_anomaly_reason")
+async def analyze_anomaly_reason(request: QuestionRequest):
     """Analyze traffic congestion with detailed information"""
     try:
-        logger.info(f"Ask question request: {request.question}")
+        logger.info(f"Analyze anomaly reason request: {request.question}")
 
         # Parse the question
         run_date, pipe_name = parse_question(request.question)
+        logger.info(f"analyze_anomaly_reason get {run_date} - {pipe_name}")
         if not run_date or not pipe_name:
             return {
                 "success": False,
@@ -175,7 +180,7 @@ async def ask_question(request: QuestionRequest):
         }
 
     except Exception as e:
-        logger.error(f"Error in ask_question: {e}", exc_info=True)
+        logger.error(f"Error in analyze_anomaly_reason: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -236,8 +241,8 @@ async def root():
     return {
         "service": "Dify Traffic Detection API",
         "endpoints": {
-            "detect_congestion": "/api/detect_congestion",
-            "ask_question": "/api/ask_question",
+            "detect_anomaly": "/api/detect_anomaly",
+            "analyze_anomaly_reason": "/api/analyze_anomaly_reason",
             "plot_analysis": "/api/plot_analysis",
             "health": "/health"
         },

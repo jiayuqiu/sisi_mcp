@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import glob
@@ -9,6 +10,8 @@ from pathlib import Path
 from sqlalchemy import create_engine
 
 from mcp_conductor.detector.generic.changepoints import ChangePointDetector
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_filename(s: str) -> str:
@@ -51,8 +54,10 @@ def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int
     # load data from sqlite
     db_path = Path("data/sisi.sqlite")
     engine = create_engine(f"sqlite:///{db_path.absolute()}") # ensure this # ensure this is the correct path for the sqlite file. 
+    query = "SELECT * FROM ship_cnt_in_pipe"
+    logger.info("SQL: %s", query)
     df = pd.read_sql(
-        "SELECT * FROM ship_cnt_in_pipe", con=engine
+        query, con=engine
     )
 
     # Filter data for the specified pipe and time window

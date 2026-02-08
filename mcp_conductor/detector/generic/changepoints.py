@@ -75,10 +75,18 @@ class ChangePointDetector(BaseDetector):
         Returns:
             List[int]: Indices of detected change points
         """
-        THRESHOLD_DICT: dict = {
+        THRESHOLD_DICT: dict = {  # TODO: put the dict into sql table
             "曼德海峡": {
                 "min_alert_cnt": 13,
                 "max_alert_cnt": 41
+            },
+            "test_green海峡": {
+                "min_alert_cnt": 1,
+                "max_alert_cnt": 100
+            },
+            "test_red海峡": {
+                "min_alert_cnt": 15,
+                "max_alert_cnt": 16
             },
             "马六甲海峡": {
                 "min_alert_cnt": 13,

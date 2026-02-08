@@ -11,11 +11,11 @@
     }
   ],
   "paths": {
-    "/api/detect_congestion": {
+    "/api/detect_anomaly": {
       "post": {
         "summary": "检测交通异常",
         "description": "检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡",
-        "operationId": "detectCongestion",
+        "operationId": "detectAnomaly",
         "requestBody": {
           "required": true,
           "content": {

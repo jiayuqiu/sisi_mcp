@@ -25,7 +25,7 @@ class TestSISIClient(unittest.TestCase):
         
         # assert if get error response
         self.assertIsInstance(response, dict, msg="Response is not a dict")
-        self.assertNotIn("error", response, msg=f"DeepSeek API error: {response.get('error')}")
+        self.assertNotIn("error", response, msg=f"SISI API error: {response.get('error')}")
         
         # Extract and display the answer
         answer = response.get("choices", [{}])[0].get("message", {}).get("content", "No response")

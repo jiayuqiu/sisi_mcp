@@ -7,7 +7,7 @@ import requests
 import json
 
 
-def test_detect_congestion():
+def test_detect_anomaly():
     """Test the detect_traffic_congestion tool."""
     print("=" * 60)
     print("Testing detect_traffic_congestion...")
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         list_tools()
         
         # Test each tool
-        test_detect_congestion()
+        test_detect_anomaly()
         test_ask_traffic_question()
         test_plot_congestion()
         

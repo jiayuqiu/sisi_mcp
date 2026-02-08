@@ -31,10 +31,10 @@ class PlotRequest(BaseModel):
     pipe_name: str
 
 
-@app.post("/api/detect_congestion")
-async def detect_congestion(request: QuestionRequest):
+@app.post("/api/detect_anomaly")
+async def detect_anomaly(request: QuestionRequest):
     """Test endpoint for congestion detection"""
-    logger.info(f"Test detect_congestion: {request.question}")
+    logger.info(f"Test detect_anomaly: {request.question}")
 
     return {
         "success": True,
@@ -44,10 +44,10 @@ async def detect_congestion(request: QuestionRequest):
     }
 
 
-@app.post("/api/ask_question")
-async def ask_question(request: QuestionRequest):
+@app.post("/api/analyze_anomaly_reason")
+async def analyze_anomaly_reason(request: QuestionRequest):
     """Test endpoint for detailed analysis"""
-    logger.info(f"Test ask_question: {request.question}")
+    logger.info(f"Test analyze_anomaly_reason: {request.question}")
 
     return {
         "success": True,
@@ -121,8 +121,8 @@ async def root():
         "service": "Dify Test API",
         "mode": "TEST",
         "endpoints": [
-            "/api/detect_congestion",
-            "/api/ask_question",
+            "/api/detect_anomaly",
+            "/api/analyze_anomaly_reason",
             "/api/plot_analysis"
         ],
         "note": "This is a test server. Configure data/sisi.sqlite for production."

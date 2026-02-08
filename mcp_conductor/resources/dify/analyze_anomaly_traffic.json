@@ -11,11 +11,11 @@
     }
   ],
   "paths": {
-    "/api/ask_question": {
+    "/api/analyze_anomaly_reason": {
       "post": {
         "summary": "分析交通异常原因",
         "description": "深度分析交通异常原因，结合天气、新闻等信息给出详细解释",
-        "operationId": "askQuestion",
+        "operationId": "analyzeAnomalyReason",
         "requestBody": {
           "required": true,
           "content": {

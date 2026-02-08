@@ -6,6 +6,7 @@ Finally, feed the text of weather and news into sisi-ai to rephase, summay and t
 from pprint import pprint
 import argparse
 import json
+import logging
 
 import pandas as pd
 
@@ -14,6 +15,8 @@ from mcp_conductor.resources.sisi.APIs.LLM import SISIClient
 from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
 from mcp_conductor.resources.tools import remove_think_tag
 from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
+
+logger = logging.getLogger(__name__)
 
 
 def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
@@ -40,11 +43,15 @@ def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
         weather_news_response = ds_client.search_and_ask(
             question=weather_news_question
         )
+        logger.info(f"weather_news_response: {weather_news_response}")
         weather_news_text = weather_news_response["choices"][0]["message"]["content"]
 
-        # rephase and summay by sisi-ai
-        summary_resp = sisi_client.search_and_ask(question=weather_news_text)
-        summary_text = remove_think_tag(summary_resp["choices"][0]["message"]["content"])
+        # # rephase and summay by sisi-ai  
+        # TODO: comment out this block as SISI API Issue, will enable once SISI API reover.
+        summary_text = weather_news_text
+        # summary_resp = sisi_client.search_and_ask(question=weather_news_text)
+        # logger.info(f"summary_resp: {summary_resp}")
+        # summary_text = remove_think_tag(summary_resp["choices"][0]["message"]["content"])
         # remove think tag
         detection_records.append(
             {

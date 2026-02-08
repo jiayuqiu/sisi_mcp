@@ -37,8 +37,8 @@ This will start:
 
 The Dify API Server (`http://localhost:8002`) provides three endpoints:
 
-1. `/api/detect_congestion` - Simple yes/no congestion detection
-2. `/api/ask_question` - Detailed analysis with weather and news
+1. `/api/detect_anomaly` - Simple yes/no congestion detection
+2. `/api/analyze_anomaly_reason` - Detailed analysis with weather and news
 3. `/api/plot_analysis` - Generate congestion visualization charts
 
 ## OpenAPI Schemas for Dify
@@ -62,11 +62,11 @@ Use this schema in Dify's "Create Custom Tool" dialog:
     }
   ],
   "paths": {
-    "/api/detect_congestion": {
+    "/api/detect_anomaly": {
       "post": {
         "summary": "检测交通异常",
         "description": "检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡",
-        "operationId": "detectCongestion",
+        "operationId": "detectAnomaly",
         "requestBody": {
           "required": true,
           "content": {
@@ -139,11 +139,11 @@ Use this schema for detailed analysis:
     }
   ],
   "paths": {
-    "/api/ask_question": {
+    "/api/analyze_anomaly_reason": {
       "post": {
         "summary": "分析交通异常原因",
         "description": "深度分析交通异常原因，结合天气、新闻等信息给出详细解释",
-        "operationId": "askQuestion",
+        "operationId": "analyzeAnomalyReason",
         "requestBody": {
           "required": true,
           "content": {
@@ -284,7 +284,7 @@ Use this schema for visualization:
 ### Test Congestion Detection
 
 ```bash
-curl -X POST http://localhost:8002/api/detect_congestion \
+curl -X POST http://localhost:8002/api/detect_anomaly \
   -H "Content-Type: application/json" \
   -d '{"question": "2023年12月 曼德海峡是否发生异常？"}'
 ```
@@ -303,10 +303,9 @@ Expected response:
 ### Test Malacca Strait
 
 ```bash
-curl -X POST http://localhost:8002/api/detect_congestion \
+curl -X POST http://localhost:8002/api/detect_anomaly \
   -H "Content-Type: application/json" \
   -d '{"question": "2023年12月 马六甲海峡是否发生异常？"}'
-```
 
 Expected response:
 ```json

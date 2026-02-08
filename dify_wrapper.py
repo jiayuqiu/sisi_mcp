@@ -64,8 +64,8 @@ async def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
         return result
 
 
-@app.post("/api/detect_congestion")
-async def detect_congestion(request: QuestionRequest):
+@app.post("/api/detect_anomaly")
+async def detect_anomaly(request: QuestionRequest):
     """Wrapper for detect_traffic_congestion tool"""
     try:
         result = await call_mcp_tool(
@@ -76,12 +76,12 @@ async def detect_congestion(request: QuestionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error calling detect_congestion: {e}")
+        logger.error(f"Error calling detect_anomaly: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/ask_question")
-async def ask_question(request: QuestionRequest):
+@app.post("/api/analyze_anomaly_reason")
+async def analyze_anomaly_reason(request: QuestionRequest):
     """Wrapper for ask_traffic_question tool"""
     try:
         result = await call_mcp_tool(
@@ -92,7 +92,7 @@ async def ask_question(request: QuestionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error calling ask_question: {e}")
+        logger.error(f"Error calling analyze_anomaly_reason: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
