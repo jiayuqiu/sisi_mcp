@@ -3,8 +3,17 @@
 Simple HTTP API for Dify Integration
 Directly exposes the traffic detection functions as REST endpoints
 """
+import os
 import logging
 import asyncio
+
+# Configure logging early, before other imports create their loggers
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,12 +24,6 @@ from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
 from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 import re
 import calendar
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
 logger = logging.getLogger("dify_api")
 
 app = FastAPI(title="Dify Traffic Detection API")

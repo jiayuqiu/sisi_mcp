@@ -38,11 +38,17 @@ class DeepSeekClient(BaseAIClient):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+
+        # set thinking tag
+        if self.return_thinking:
+            self.thinking_tag: str = "enabled"
+        else:
+            self.thinking_tag: str = "disabled"
     
     def search_and_ask(
         self,
         question: str,
-        model: str = "deepseek-chat",
+        model: str = "deepseek-reasoner",
         web_search: bool = True,
         temperature: float = 1.0,
         max_tokens: Optional[int] = None,
@@ -53,7 +59,7 @@ class DeepSeekClient(BaseAIClient):
         
         Args:
             question: The question or prompt to ask.
-            model: Model to use (default: "deepseek-chat").
+            model: Model to use (default: "deepseek-reasoner").
             web_search: Whether to enable web search (default: True).
             temperature: Sampling temperature (0-2, default: 1.0).
             max_tokens: Maximum tokens in response (optional).
@@ -73,7 +79,10 @@ class DeepSeekClient(BaseAIClient):
                 }
             ],
             "temperature": temperature,
-            "stream": stream
+            "stream": stream,
+            "thinking": {
+                "type": self.thinking_tag
+            }
         }
         
         # Add web search parameter if enabled
@@ -91,7 +100,7 @@ class DeepSeekClient(BaseAIClient):
                 response = requests.post(url, headers=self.headers, json=payload, timeout=self.timeout)
                 response.raise_for_status()
                 result = response.json()
-                logger.debug(f"search_and_ask response: {pformat(result)}")
+                logger.info(f"search_and_ask response: {pformat(result)}")
                 return result
         except requests.exceptions.RequestException as e:
             return {"error": str(e)}
@@ -119,7 +128,8 @@ class DeepSeekClient(BaseAIClient):
                                     if content:
                                         print(content, end='', flush=True)
                                         full_content += content
-                                    if self.return_thinking:
+
+                                        # get thinking log
                                         reasoning = delta.get('reasoning_content', '')
                                         if reasoning:
                                             full_reasoning += reasoning
@@ -131,13 +141,13 @@ class DeepSeekClient(BaseAIClient):
                     "choices": [{
                         "message": {
                             "role": "assistant",
-                            "content": full_content
+                            "content": full_content,
+                            "reasoning_content": full_reasoning
                         }
                     }],
                     "streamed": True
                 }
-                if self.return_thinking:
-                    result["thinking_log"] = full_reasoning
+
                 return result
         except requests.exceptions.RequestException as e:
             return {"error": str(e)}
@@ -167,6 +177,7 @@ class DeepSeekClient(BaseAIClient):
         """
         url = f"{self.base_url}/chat/completions"
 
+
         payload = {
             "model": model,
             "messages": messages,
@@ -195,6 +206,7 @@ class DeepSeekClient(BaseAIClient):
                 return result
         except requests.exceptions.RequestException as e:
             return {"error": str(e)}
+        
 
 
 # def main_test():

@@ -7,6 +7,8 @@ from pprint import pprint
 import argparse
 import json
 import logging
+import sqlite3
+from pathlib import Path
 
 import pandas as pd
 
@@ -17,6 +19,30 @@ from mcp_conductor.resources.tools import remove_think_tag
 from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
 
 logger = logging.getLogger(__name__)
+
+DB_PATH = Path("./data/sisi.sqlite")
+
+
+def save_to_log(response: dict, payload: str, question_type: str = "weather_news") -> None:
+    """Save a DeepSeek API response to log_agent_work_history."""
+    try:
+        return_id = response.get("id", "")
+        content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        reasoning_content = response.get("choices", [{}])[0].get("message", {}).get("reasoning_content", "")
+        full_response = json.dumps(response, ensure_ascii=False)
+
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.execute(
+            """INSERT INTO log_agent_work_history
+               (return_id, question_type, full_response, payload, content, reasoning_content)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (return_id, question_type, full_response, payload, content, reasoning_content),
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved log for return_id={return_id}")
+    except Exception as e:
+        logger.error(f"Failed to save log: {e}")
 
 
 def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
@@ -44,6 +70,7 @@ def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
             question=weather_news_question
         )
         logger.info(f"weather_news_response: {weather_news_response}")
+        save_to_log(weather_news_response, payload=weather_news_question, question_type="weather_news")
         weather_news_text = weather_news_response["choices"][0]["message"]["content"]
 
         # # rephase and summay by sisi-ai  

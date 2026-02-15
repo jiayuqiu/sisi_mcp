@@ -15,6 +15,7 @@ dependencies = [
     "sqlalchemy",
     "fastapi",
     "uvicorn",
+    "jinja2",
 ]
 
 [dependency-groups]

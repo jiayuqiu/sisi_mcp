@@ -26,9 +26,11 @@ class TestDeepSeekClient(unittest.TestCase):
         self.assertIsInstance(response, dict, msg="Response is not a dict")
         self.assertNotIn("error", response, msg=f"DeepSeek API error: {response.get('error')}")
         
+        # full_answer = response.get("choices", [{}])[0].get("message", {}).get("content", "No response")
+        print("@@full answer: ", response)
         # Extract and display the answer
         answer = response.get("choices", [{}])[0].get("message", {}).get("content", "No response")
-        print(answer)
+        print("@@answer", answer)
         print("-" * 80)
         
         # Show usage information if available

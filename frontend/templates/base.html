@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SisiMCP{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">SisiMCP</div>
+        <div class="nav-links">
+            <a href="/chatbot" class="nav-link {% block nav_chatbot %}{% endblock %}">Chatbot</a>
+            <a href="/workflow" class="nav-link {% block nav_workflow %}{% endblock %}">Workflow</a>
+        </div>
+    </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -16,6 +16,7 @@ services:
       - BCI_SECRET_KEY=${BCI_SECRET_KEY}
       - BCI_BASE_URL=${BCI_BASE_URL}
     volumes:
+      - ../data:/app/data
       - ../tmp:/app/tmp
     command: uv run python mcp_server_http.py
     restart: unless-stopped
@@ -34,8 +35,25 @@ services:
       - BCI_SECRET_KEY=${BCI_SECRET_KEY}
       - BCI_BASE_URL=${BCI_BASE_URL}
     volumes:
+      - ../data:/app/data
       - ../tmp:/app/tmp
     command: uv run python dify_api_server.py
     restart: unless-stopped
     depends_on:
       - mcp_server
+
+  # frontend:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile
+  #   container_name: sisimcp-frontend
+  #   ports:
+  #     - "8003:8003"
+  #   environment:
+  #     - DIFY_API_KEY=${DIFY_API_KEY}
+  #     - DIFY_CHATFLOW_URL=${DIFY_CHATFLOW_URL}
+  #   volumes:
+  #     - ../data:/app/data
+  #     - ../tmp:/app/tmp
+  #   command: uv run python frontend/app.py
+  #   restart: unless-stopped

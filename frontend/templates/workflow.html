@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Workflow Inspector - SisiMCP{% endblock %}
+{% block nav_workflow %}active{% endblock %}
+
+{% block content %}
+<div class="workflow-container">
+    <div class="workflow-header">
+        <h2>Workflow Logs</h2>
+        <button onclick="loadLogs()" class="refresh-btn">Refresh</button>
+    </div>
+    <div class="table-wrapper">
+        <table id="logsTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Question Type</th>
+                    <th>Run Date</th>
+                    <th>Content</th>
+                    <th>Reasoning Content</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody">
+                <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <button id="prevBtn" onclick="changePage(-1)" disabled>Prev</button>
+        <span id="pageInfo">Page 1</span>
+        <button id="nextBtn" onclick="changePage(1)">Next</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const PAGE_SIZE = 20;
+    let currentPage = 0;
+    let totalLogs = 0;
+
+    async function loadLogs() {
+        const offset = currentPage * PAGE_SIZE;
+        try {
+            const resp = await fetch(`/api/workflow-logs?limit=${PAGE_SIZE}&offset=${offset}`);
+            const data = await resp.json();
+            totalLogs = data.total;
+            renderLogs(data.logs);
+            updatePagination();
+        } catch (e) {
+            document.getElementById("logsBody").innerHTML =
+                `<tr><td colspan="5" class="empty-state">Failed to load logs: ${e.message}</td></tr>`;
+        }
+    }
+
+    function renderLogs(logs) {
+        const tbody = document.getElementById("logsBody");
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No workflow logs found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = logs.map(log => `
+            <tr>
+                <td>${log.id || ""}</td>
+                <td>${escapeHtml(log.question_type || "")}</td>
+                <td>${escapeHtml(log.run_date || "")}</td>
+                <td class="cell-truncate" title="${escapeAttr(log.content || "")}">${escapeHtml(log.content || "")}</td>
+                <td class="cell-truncate" title="${escapeAttr(log.reasoning_content || "")}">${escapeHtml(log.reasoning_content || "")}</td>
+            </tr>
+        `).join("");
+    }
+
+    function updatePagination() {
+        const totalPages = Math.max(1, Math.ceil(totalLogs / PAGE_SIZE));
+        document.getElementById("pageInfo").textContent = `Page ${currentPage + 1} / ${totalPages}`;
+        document.getElementById("prevBtn").disabled = currentPage === 0;
+        document.getElementById("nextBtn").disabled = currentPage >= totalPages - 1;
+    }
+
+    function changePage(delta) {
+        currentPage += delta;
+        loadLogs();
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement("div");
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function escapeAttr(str) {
+        return str.replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    }
+
+    loadLogs();
+</script>
+{% endblock %}

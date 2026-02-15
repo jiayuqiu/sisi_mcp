@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Chatbot - SisiMCP{% endblock %}
+{% block nav_chatbot %}active{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="chat-messages" id="chatMessages">
+        <div class="message bot-message">
+            <div class="message-content">
+                你好！我是航运通道异常检测助手。你可以问我关于航运通道的问题，例如：
+                <br><br>
+                "2023年12月曼德海峡是否发生异常？"
+            </div>
+        </div>
+    </div>
+    <div class="chat-input-area">
+        <textarea id="chatInput" placeholder="输入你的问题..." rows="1"
+                  onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+        <button id="sendBtn" onclick="sendMessage()">发送</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let conversationId = "";
+    const messagesDiv = document.getElementById("chatMessages");
+    const input = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    // Auto-resize textarea
+    input.addEventListener("input", function () {
+        this.style.height = "auto";
+        this.style.height = Math.min(this.scrollHeight, 120) + "px";
+    });
+
+    function appendMessage(content, isUser) {
+        const div = document.createElement("div");
+        div.className = `message ${isUser ? "user-message" : "bot-message"}`;
+        div.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML.replace(/\n/g, "<br>");
+    }
+
+    async function sendMessage() {
+        const message = input.value.trim();
+        if (!message) return;
+
+        appendMessage(message, true);
+        input.value = "";
+        input.style.height = "auto";
+        sendBtn.disabled = true;
+        sendBtn.textContent = "...";
+
+        try {
+            const resp = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, conversation_id: conversationId }),
+            });
+            const data = await resp.json();
+
+            if (data.error) {
+                appendMessage("Error: " + data.error, false);
+            } else {
+                appendMessage(data.answer, false);
+                conversationId = data.conversation_id || conversationId;
+            }
+        } catch (e) {
+            appendMessage("Network error: " + e.message, false);
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = "发送";
+        }
+    }
+</script>
+{% endblock %}
