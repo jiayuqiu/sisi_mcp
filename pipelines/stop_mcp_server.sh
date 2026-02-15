@@ -6,11 +6,47 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# Detect OS
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    IS_WINDOWS=true
+else
+    IS_WINDOWS=false
+fi
+
 MCP_PID_FILE="./tmp/mcp_server.pid"
 DIFY_PID_FILE="./tmp/dify_api_server.pid"
 
 echo "🛑 Stopping servers..."
 echo ""
+
+# Function to check if process is running
+check_process() {
+    local pid=$1
+    if [ "$IS_WINDOWS" = true ]; then
+        tasklist //FI "PID eq $pid" 2>/dev/null | grep -q "$pid"
+    else
+        ps -p "$pid" > /dev/null 2>&1
+    fi
+}
+
+# Function to kill process
+kill_process() {
+    local pid=$1
+    local force=$2
+    if [ "$IS_WINDOWS" = true ]; then
+        if [ "$force" = true ]; then
+            taskkill //F //PID "$pid" > /dev/null 2>&1
+        else
+            taskkill //PID "$pid" > /dev/null 2>&1
+        fi
+    else
+        if [ "$force" = true ]; then
+            kill -9 "$pid" 2>/dev/null
+        else
+            kill "$pid" 2>/dev/null
+        fi
+    fi
+}
 
 # Function to stop a server
 stop_server() {
@@ -23,12 +59,12 @@ stop_server() {
     if [ -f "$PID_FILE" ]; then
         SERVER_PID=$(cat "$PID_FILE")
 
-        if ps -p "$SERVER_PID" > /dev/null 2>&1; then
-            kill "$SERVER_PID" 2>/dev/null
+        if check_process "$SERVER_PID"; then
+            kill_process "$SERVER_PID" false
 
             # Wait up to 5 seconds for graceful shutdown
             for i in {1..5}; do
-                if ! ps -p "$SERVER_PID" > /dev/null 2>&1; then
+                if ! check_process "$SERVER_PID"; then
                     echo "   ✅ $NAME stopped gracefully"
                     rm -f "$PID_FILE"
                     return 0
@@ -37,10 +73,10 @@ stop_server() {
             done
 
             # Force kill if still running
-            kill -9 "$SERVER_PID" 2>/dev/null
+            kill_process "$SERVER_PID" true
             sleep 1
 
-            if ! ps -p "$SERVER_PID" > /dev/null 2>&1; then
+            if ! check_process "$SERVER_PID"; then
                 echo "   ✅ $NAME stopped (forced)"
                 rm -f "$PID_FILE"
                 return 0
@@ -53,24 +89,7 @@ stop_server() {
             rm -f "$PID_FILE"
         fi
     else
-        # Try to find the process anyway
-        PIDS=$(ps aux | grep "$PROCESS_PATTERN" | awk '{print $2}')
-
-        if [ -z "$PIDS" ]; then
-            echo "   ℹ️  No $NAME processes found"
-        else
-            echo "   Found process(es): $PIDS"
-            kill $PIDS 2>/dev/null
-            sleep 1
-
-            # Force kill if still running
-            for PID in $PIDS; do
-                if ps -p $PID > /dev/null 2>&1; then
-                    kill -9 $PID 2>/dev/null
-                fi
-            done
-            echo "   ✅ $NAME stopped"
-        fi
+        echo "   ℹ️  No PID file found for $NAME"
     fi
 }
 

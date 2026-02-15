@@ -10,6 +10,15 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Activate virtual environment if it exists
+if [ -d ".venv" ]; then
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+        source .venv/Scripts/activate
+    else
+        source .venv/bin/activate
+    fi
+fi
+
 # Install dependencies if needed
 echo "📦 Checking dependencies..."
 pip install -q fastapi uvicorn httpx fastmcp || {

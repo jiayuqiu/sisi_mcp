@@ -1,0 +1,41 @@
+services:
+  mcp_server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: sisimcp-mcp-server
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_TRANSPORT=streamable-http
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - SISI_API_KEY=${SISI_API_KEY}
+      - BCI_APP_ID=${BCI_APP_ID}
+      - BCI_SECRET_KEY=${BCI_SECRET_KEY}
+      - BCI_BASE_URL=${BCI_BASE_URL}
+    volumes:
+      - ../tmp:/app/tmp
+    command: uv run python mcp_server_http.py
+    restart: unless-stopped
+
+  dify_api_server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: sisimcp-dify-api
+    ports:
+      - "8002:8002"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - SISI_API_KEY=${SISI_API_KEY}
+      - BCI_APP_ID=${BCI_APP_ID}
+      - BCI_SECRET_KEY=${BCI_SECRET_KEY}
+      - BCI_BASE_URL=${BCI_BASE_URL}
+    volumes:
+      - ../tmp:/app/tmp
+    command: uv run python dify_api_server.py
+    restart: unless-stopped
+    depends_on:
+      - mcp_server

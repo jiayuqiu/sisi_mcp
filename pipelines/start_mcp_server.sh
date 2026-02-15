@@ -6,12 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# Detect OS and set Python command
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    IS_WINDOWS=true
+    PYTHON_CMD="python"
+else
+    IS_WINDOWS=false
+    PYTHON_CMD="python3"
+fi
+
 # Activate virtual environment if it exists
 if [ -d ".venv" ]; then
-    source .venv/bin/activate
-    PYTHON_CMD="python3"
-else
-    PYTHON_CMD="python3"
+    if [ "$IS_WINDOWS" = true ]; then
+        source .venv/Scripts/activate
+    else
+        source .venv/bin/activate
+    fi
 fi
 
 # Configuration
@@ -32,11 +42,21 @@ mkdir -p ./tmp
 echo "🚀 Starting servers..."
 echo ""
 
+# Function to check if process is running
+check_process() {
+    local pid=$1
+    if [ "$IS_WINDOWS" = true ]; then
+        tasklist //FI "PID eq $pid" 2>/dev/null | grep -q "$pid"
+    else
+        ps -p "$pid" > /dev/null 2>&1
+    fi
+}
+
 # Start MCP server
 echo "1️⃣  Starting MCP HTTP Server..."
 if [ -f "$MCP_PID_FILE" ]; then
     OLD_PID=$(cat "$MCP_PID_FILE")
-    if ps -p "$OLD_PID" > /dev/null 2>&1; then
+    if check_process "$OLD_PID"; then
         echo "   ⚠️  MCP server already running (PID: $OLD_PID)"
     else
         rm -f "$MCP_PID_FILE"
@@ -44,7 +64,7 @@ if [ -f "$MCP_PID_FILE" ]; then
 fi
 
 if [ ! -f "$MCP_PID_FILE" ]; then
-    nohup $PYTHON_CMD mcp_server_http.py \
+    $PYTHON_CMD mcp_server_http.py \
         --host "$MCP_HOST" \
         --port "$MCP_PORT" \
         --transport "$TRANSPORT" \
@@ -54,7 +74,7 @@ if [ ! -f "$MCP_PID_FILE" ]; then
     echo $MCP_PID > "$MCP_PID_FILE"
     sleep 2
 
-    if ps -p $MCP_PID > /dev/null 2>&1; then
+    if check_process $MCP_PID; then
         echo "   ✅ MCP server started (PID: $MCP_PID)"
         echo "      URL: http://$MCP_HOST:$MCP_PORT"
     else
@@ -69,7 +89,7 @@ echo ""
 echo "2️⃣  Starting Dify API Server..."
 if [ -f "$DIFY_PID_FILE" ]; then
     OLD_PID=$(cat "$DIFY_PID_FILE")
-    if ps -p "$OLD_PID" > /dev/null 2>&1; then
+    if check_process "$OLD_PID"; then
         echo "   ⚠️  Dify API server already running (PID: $OLD_PID)"
     else
         rm -f "$DIFY_PID_FILE"
@@ -77,13 +97,13 @@ if [ -f "$DIFY_PID_FILE" ]; then
 fi
 
 if [ ! -f "$DIFY_PID_FILE" ]; then
-    nohup $PYTHON_CMD dify_api_server.py >> "$DIFY_LOG_FILE" 2>&1 &
+    $PYTHON_CMD dify_api_server.py >> "$DIFY_LOG_FILE" 2>&1 &
 
     DIFY_PID=$!
     echo $DIFY_PID > "$DIFY_PID_FILE"
     sleep 2
 
-    if ps -p $DIFY_PID > /dev/null 2>&1; then
+    if check_process $DIFY_PID; then
         echo "   ✅ Dify API server started (PID: $DIFY_PID)"
         echo "      URL: http://$DIFY_HOST:$DIFY_PORT"
     else

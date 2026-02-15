@@ -60,19 +60,8 @@ def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
                 "detection": summary_text
             }
         )
-    
-    # print the latest detection records dict
-    pprint(f"🔴 {pipe_name} 通航拥堵 ")
-    pprint(detection_records[-1]["detection"])
+
     return detection_records[-1]["detection"]
-    
-    # Save detection_records as JSON file
-    # output_file = f"/home/jerry/codebase/sisimcp/data/detection/detection_results_{run_date.replace('-', '')}.json"
-    # with open(output_file, 'w', encoding='utf-8') as f:
-    #     json.dump(detection_records, f, ensure_ascii=False, indent=2)
-    
-    # print(f"\nDetection results saved to: {output_file}")
-    # print(f"Total records: {len(detection_records)}")
 
 
 def trigger_traffic_detect(run_date: str, pipe_name: str) -> str:
