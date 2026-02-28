@@ -146,3 +146,8 @@ tmp/
 private/
 .claude/
 .idea/
+
+# Next.js modules
+frontend_nextjs/node_modules/
+frontend_nextjs/.next/
+frontend_nextjs/.env.local

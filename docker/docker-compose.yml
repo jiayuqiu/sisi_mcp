@@ -1,3 +1,5 @@
+name: sisi-backend
+
 services:
   mcp_server:
     build:

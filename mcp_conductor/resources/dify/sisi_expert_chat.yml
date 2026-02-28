@@ -1,0 +1,513 @@
+app:
+  description: sisi_expert
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: sisi_expert_chat
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.2.8@aae2be0913b8c6f0b80cff58e08d7a8b4c214569b41778413fcaea204561ff16
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+      id: 1770528546254-source-1770528175479-target
+      selected: false
+      source: '1770528546254'
+      sourceHandle: source
+      target: '1770528175479'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: answer
+      id: 1770528713574-source-answer-target
+      source: '1770528713574'
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: tool
+      id: 1770528175479-true-1770528159580-target
+      source: '1770528175479'
+      sourceHandle: 'true'
+      target: '1770528159580'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
+        targetType: code
+      id: 1770528159580-source-1770528713574-target
+      source: '1770528159580'
+      sourceHandle: source
+      target: '1770528713574'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: answer
+      id: 1770528175479-false-answer-target
+      source: '1770528175479'
+      sourceHandle: 'false'
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1770517231492-source-llm-target
+      source: '1770517231492'
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: tool
+      id: llm-source-1770519006180-target
+      source: llm
+      sourceHandle: source
+      target: '1770519006180'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
+        targetType: code
+      id: 1770519006180-source-1770528546254-target
+      source: '1770519006180'
+      sourceHandle: source
+      target: '1770528546254'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: User Input
+        type: start
+        variables: []
+      height: 71
+      id: '1770517231492'
+      position:
+        x: 643.0829525353627
+        y: -16.71845319796543
+      positionAbsolute:
+        x: 643.0829525353627
+        y: -16.71845319796543
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.5
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: 8fd0f5bd-8f5b-4d46-82e5-5f11dc50b760
+          role: system
+          text: "你是一个信息提取助手。从用户的问题中提取以下信息：\n- 年份 (year)\n- 月份 (month)  \n- 地点/通道名称\
+            \ (location)\n\n请以JSON格式返回提取的信息：\n{\n  \"year\": \"YYYY\",\n  \"month\"\
+            : \"MM\",\n  \"location\": \"地点名称\"\n}\n\n如果某个信息缺失，请使用null。\n只返回JSON，不要添加其他解释。"
+        - id: d69decd2-29c6-47dd-8690-0634e8d3a35a
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              location:
+                description: 通道名称，如曼德海峡或马六甲海峡
+                type: string
+              month:
+                description: 月份，格式MM或M
+                type: string
+              year:
+                description: 年份，格式YYYY
+                type: string
+            required:
+            - year
+            - month
+            - location
+            type: object
+        structured_output_enabled: true
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: llm
+      position:
+        x: 643.0829525353627
+        y: 153.02003488570693
+      positionAbsolute:
+        x: 643.0829525353627
+        y: 153.02003488570693
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        answer: '结论: {{#1770528546254.result#}}
+
+          分析: {{#1770528713574.reason#}}'
+        selected: false
+        title: Answer
+        type: answer
+        variables: []
+      height: 118
+      id: answer
+      position:
+        x: 1239.805295458212
+        y: 474.1945528957344
+      positionAbsolute:
+        x: 1239.805295458212
+        y: 474.1945528957344
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 用中文提出的问题，包含年月和通道名称
+            ja_JP: 用中文提出的问题，包含年月和通道名称
+            pt_BR: 用中文提出的问题，包含年月和通道名称
+            zh_Hans: 用中文提出的问题，包含年月和通道名称
+          label:
+            en_US: question
+            ja_JP: question
+            pt_BR: question
+            zh_Hans: question
+          llm_description: 用中文提出的问题，包含年月和通道名称
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 用中文提出的问题，包含年月和通道名称
+            ja_JP: 用中文提出的问题，包含年月和通道名称
+            pt_BR: 用中文提出的问题，包含年月和通道名称
+            zh_Hans: 用中文提出的问题，包含年月和通道名称
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          question: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 826cccc6-09f9-4436-af6c-6d2e80674e14
+        provider_name: Detect Traffic Congestion Tool
+        provider_type: api
+        selected: false
+        title: detectCongestion
+        tool_configurations: {}
+        tool_description: 检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡
+        tool_label: detectCongestion
+        tool_name: detectCongestion
+        tool_node_version: '2'
+        tool_parameters:
+          question:
+            type: mixed
+            value: '{{#llm.structured_output.year#}}年{{#llm.structured_output.month#}}月
+              {{#llm.structured_output.location#}}是否发生拥堵'
+        type: tool
+      height: 50
+      id: '1770519006180'
+      position:
+        x: 643.0829525353627
+        y: 354.90474523395966
+      positionAbsolute:
+        x: 643.0829525353627
+        y: 354.90474523395966
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 用中文提出的问题，包含年月、通道名称和分析请求
+            ja_JP: 用中文提出的问题，包含年月、通道名称和分析请求
+            pt_BR: 用中文提出的问题，包含年月、通道名称和分析请求
+            zh_Hans: 用中文提出的问题，包含年月、通道名称和分析请求
+          label:
+            en_US: question
+            ja_JP: question
+            pt_BR: question
+            zh_Hans: question
+          llm_description: 用中文提出的问题，包含年月、通道名称和分析请求
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 用中文提出的问题，包含年月、通道名称和分析请求
+            ja_JP: 用中文提出的问题，包含年月、通道名称和分析请求
+            pt_BR: 用中文提出的问题，包含年月、通道名称和分析请求
+            zh_Hans: 用中文提出的问题，包含年月、通道名称和分析请求
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          question: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 4c61f38d-146d-4959-9dbb-3b0a862f4e12
+        provider_name: Analyze traffic anomly
+        provider_type: api
+        selected: false
+        title: analyzeAnomalyReason
+        tool_configurations: {}
+        tool_description: 深度分析交通异常原因，结合天气、新闻等信息给出详细解释
+        tool_label: analyzeAnomalyReason
+        tool_name: analyzeAnomalyReason
+        tool_node_version: '2'
+        tool_parameters:
+          question:
+            type: mixed
+            value: 请分析 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}}
+              发生拥堵的原因
+        type: tool
+      height: 50
+      id: '1770528159580'
+      position:
+        x: 1420.5398743474834
+        y: 10.548677857571562
+      positionAbsolute:
+        x: 1420.5398743474834
+        y: 10.548677857571562
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: is
+            id: 49e3ce0e-b481-4c90-b5aa-a56fbd1abcd2
+            value: true
+            varType: boolean
+            variable_selector:
+            - '1770528546254'
+            - if_anomaly
+          id: 'true'
+          logical_operator: and
+        selected: false
+        title: IF/ELSE
+        type: if-else
+      height: 122
+      id: '1770528175479'
+      position:
+        x: 1090.0991990313682
+        y: -19.301405733328025
+      positionAbsolute:
+        x: 1090.0991990313682
+        y: -19.301405733328025
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        code: "import json\n\ndef main(detection_result: str) -> dict:\n    # Parse\
+          \ the JSON string\n    result = json.loads(detection_result)\n    \n   \
+          \ # Extract the if_anomaly field\n    if_anomaly: bool = result.get(\"if_anomaly\"\
+          , False)\n    run_date: str = result.get(\"run_date\", \"\")\n    pipe_name:\
+          \ str = result.get(\"pipe_name\", \"\")\n    result: str = result.get(\"\
+          result\", \"\")\n    \n    return {\n        \"if_anomaly\": if_anomaly,\n\
+          \        \"run_date\": run_date,\n        \"pipe_name\": pipe_name,\n  \
+          \      \"result\": result\n    }"
+        code_language: python3
+        desc: parse if_anamaly flag
+        outputs:
+          if_anomaly:
+            children: null
+            type: boolean
+          pipe_name:
+            children: null
+            type: string
+          result:
+            children: null
+            type: string
+          run_date:
+            children: null
+            type: string
+        selected: false
+        title: Parse & To Json Obj
+        type: code
+        variables:
+        - value_selector:
+          - '1770519006180'
+          - text
+          value_type: string
+          variable: detection_result
+      height: 78
+      id: '1770528546254'
+      position:
+        x: 632.4559619962356
+        y: 559.9625670959725
+      positionAbsolute:
+        x: 632.4559619962356
+        y: 559.9625670959725
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    # Parse\
+          \ the JSON string\n    data = json.loads(analysis_result)\n    \n    # Extract\
+          \ fields\n    success = data.get(\"success\", False)\n    result = data.get(\"\
+          result\", \"\")\n    run_date = data.get(\"run_date\", \"\")\n    pipe_name\
+          \ = data.get(\"pipe_name\", \"\")\n    \n    return {\n        \"success\"\
+          : success,\n        \"reason\": result,\n        \"run_date\": run_date,\n\
+          \        \"pipe_name\": pipe_name\n    }\n"
+        code_language: python3
+        desc: Parse reason
+        outputs:
+          pipe_name:
+            children: null
+            type: string
+          reason:
+            children: null
+            type: string
+          run_date:
+            children: null
+            type: string
+          success:
+            children: null
+            type: boolean
+        selected: false
+        title: Parse reason
+        type: code
+        variables:
+        - value_selector:
+          - '1770528159580'
+          - text
+          value_type: string
+          variable: analysis_result
+      height: 78
+      id: '1770528713574'
+      position:
+        x: 1402.5209507043812
+        y: 207.1553565627328
+      positionAbsolute:
+        x: 1402.5209507043812
+        y: 207.1553565627328
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    viewport:
+      x: -304.29756506054537
+      y: 143.65623321815974
+      zoom: 0.7578582832551997
+  rag_pipeline_variables: []

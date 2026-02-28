@@ -2,16 +2,20 @@
 """
 Frontend Web Server
 Serves the chatbot and workflow inspector pages via Jinja2 templates.
+Also exposes a streaming SSE proxy for the Next.js frontend.
 """
 import os
 import logging
 import sqlite3
+import json
 from pathlib import Path
+from typing import AsyncGenerator
 
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -29,6 +33,15 @@ DIFY_CHATFLOW_URL = os.getenv("DIFY_CHATFLOW_URL", "https://api.dify.ai/v1")
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "sisi.sqlite"
 
 app = FastAPI(title="SisiMCP Frontend")
+
+# Allow Next.js dev server to call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 frontend_dir = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=frontend_dir / "static"), name="static")
@@ -89,6 +102,49 @@ async def chat_proxy(req: ChatRequest):
     except requests.exceptions.RequestException as e:
         logger.error(f"Dify API error: {e}")
         return {"error": str(e)}
+
+
+@app.post("/api/chat/stream")
+async def chat_stream_proxy(req: ChatRequest):
+    """Proxy chat requests to Dify chatflow API in streaming (SSE) mode."""
+    if not DIFY_API_KEY:
+        async def err():
+            yield f"data: {json.dumps({'event': 'error', 'message': 'DIFY_API_KEY not configured'})}\n\n"
+        return StreamingResponse(err(), media_type="text/event-stream")
+
+    url = f"{DIFY_CHATFLOW_URL}/chat-messages"
+    headers = {
+        "Authorization": f"Bearer {DIFY_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "inputs": {},
+        "query": req.message,
+        "response_mode": "streaming",
+        "conversation_id": req.conversation_id,
+        "user": "web-user",
+    }
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        try:
+            with requests.post(url, json=payload, headers=headers, stream=True, timeout=120) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if line:
+                        decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+                        yield f"{decoded}\n\n"
+        except Exception as e:
+            logger.error(f"Dify streaming error: {e}")
+            yield f"data: {json.dumps({'event': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/workflow-logs")

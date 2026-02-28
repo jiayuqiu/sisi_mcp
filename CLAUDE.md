@@ -41,7 +41,7 @@ tests/                      # Test files
 uv sync
 
 # Run frontend locally. TODO: move into docker-compose.yml
-uv run python frontend/app.py
+uv run python frontend_legacy/app.py
 
 # Run tests
 uv run pytest
@@ -49,6 +49,10 @@ uv run pytest
 # Docker run MCP & Dify api server
 cd docker && docker-compose build --no-cache && docker-compose up
 ```
+
+## Corporate Project (Dify)
+
+Project path: /c/Users/qiuji/codebase/dify
 
 ## Key Conventions
 

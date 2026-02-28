@@ -1,0 +1,1185 @@
+app:
+  description: sisi_expert_stream - 支持流式输出和问题分类的海峡交通异常分析助手
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: sisi_expert_stream_chat
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.2.8@aae2be0913b8c6f0b80cff58e08d7a8b4c214569b41778413fcaea204561ff16
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: '您好！我是海峡交通异常分析助手，可以帮您检测马六甲海峡和曼德海峡的交通异常情况，并分析异常原因。请告诉我您想了解哪个通道、哪个时间段的情况？'
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 2024年1月马六甲海峡是否发生了异常？
+    - 2023年12月曼德海峡为什么会发生异常？
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    # Start → Question Classifier
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: question-classifier
+      id: start-source-qc-target
+      selected: false
+      source: node_start
+      sourceHandle: source
+      target: node_question_classifier
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # Question Classifier → LLM Extract (detection branch)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: llm
+      id: qc-cls_detection-llm_extract-target
+      selected: false
+      source: node_question_classifier
+      sourceHandle: cls_detection
+      target: node_llm_extract
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # Question Classifier → LLM Extract (analysis branch - reuse same extractor)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: llm
+      id: qc-cls_analysis-llm_extract_analysis-target
+      selected: false
+      source: node_question_classifier
+      sourceHandle: cls_analysis
+      target: node_llm_extract_analysis
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # Question Classifier → LLM Fallback (other branch)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: llm
+      id: qc-cls_other-llm_fallback-target
+      selected: false
+      source: node_question_classifier
+      sourceHandle: cls_other
+      target: node_llm_fallback
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # --- DETECTION BRANCH ---
+    # LLM Extract → detectCongestion tool
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: tool
+      id: llm_extract-source-detect_tool-target
+      selected: false
+      source: node_llm_extract
+      sourceHandle: source
+      target: node_detect_tool
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # detectCongestion → Parse detection result
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: tool
+        targetType: code
+      id: detect_tool-source-parse_detection-target
+      selected: false
+      source: node_detect_tool
+      sourceHandle: source
+      target: node_parse_detection
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # Parse detection → IF/ELSE (anomaly?)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: if-else
+      id: parse_detection-source-ifelse-target
+      selected: false
+      source: node_parse_detection
+      sourceHandle: source
+      target: node_ifelse_anomaly
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # IF/ELSE true → analyzeAnomalyReason tool
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: tool
+      id: ifelse-true-analyze_tool-target
+      selected: false
+      source: node_ifelse_anomaly
+      sourceHandle: 'true'
+      target: node_analyze_tool
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # analyzeAnomalyReason → Parse reason
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: tool
+        targetType: code
+      id: analyze_tool-source-parse_reason-target
+      selected: false
+      source: node_analyze_tool
+      sourceHandle: source
+      target: node_parse_reason
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # Parse reason → LLM Answer (anomaly detected + reason)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: llm
+      id: parse_reason-source-llm_answer_anomaly-target
+      selected: false
+      source: node_parse_reason
+      sourceHandle: source
+      target: node_llm_answer_anomaly
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # IF/ELSE false → LLM Answer (no anomaly)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: llm
+      id: ifelse-false-llm_answer_no_anomaly-target
+      selected: false
+      source: node_ifelse_anomaly
+      sourceHandle: 'false'
+      target: node_llm_answer_no_anomaly
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # LLM Answer (anomaly) → Answer node
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: llm_answer_anomaly-source-answer_detection-target
+      selected: false
+      source: node_llm_answer_anomaly
+      sourceHandle: source
+      target: node_answer_detection
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # LLM Answer (no anomaly) → Answer node (same answer node)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: llm_answer_no_anomaly-source-answer_detection-target
+      selected: false
+      source: node_llm_answer_no_anomaly
+      sourceHandle: source
+      target: node_answer_detection
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # --- ANALYSIS BRANCH ---
+    # LLM Extract (analysis) → analyzeAnomalyReason tool (direct)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: tool
+      id: llm_extract_analysis-source-analyze_tool_direct-target
+      selected: false
+      source: node_llm_extract_analysis
+      sourceHandle: source
+      target: node_analyze_tool_direct
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # analyzeAnomalyReason (direct) → Parse reason (direct)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: tool
+        targetType: code
+      id: analyze_tool_direct-source-parse_reason_direct-target
+      selected: false
+      source: node_analyze_tool_direct
+      sourceHandle: source
+      target: node_parse_reason_direct
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # Parse reason (direct) → LLM Answer (analysis)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: llm
+      id: parse_reason_direct-source-llm_answer_analysis-target
+      selected: false
+      source: node_parse_reason_direct
+      sourceHandle: source
+      target: node_llm_answer_analysis
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # LLM Answer (analysis) → Answer node (analysis)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: llm_answer_analysis-source-answer_analysis-target
+      selected: false
+      source: node_llm_answer_analysis
+      sourceHandle: source
+      target: node_answer_analysis
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    # --- FALLBACK BRANCH ---
+    # LLM Fallback → Answer node (fallback)
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: llm_fallback-source-answer_fallback-target
+      selected: false
+      source: node_llm_fallback
+      sourceHandle: source
+      target: node_answer_fallback
+      targetHandle: target
+      type: custom
+      zIndex: 0
+
+    nodes:
+    # ─────────────────────────────────────────
+    # START
+    # ─────────────────────────────────────────
+    - data:
+        selected: false
+        title: User Input
+        type: start
+        variables: []
+      height: 71
+      id: node_start
+      position:
+        x: 80
+        y: 200
+      positionAbsolute:
+        x: 80
+        y: 200
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # QUESTION CLASSIFIER
+    # ─────────────────────────────────────────
+    - data:
+        classes:
+        - id: cls_detection
+          name: 异常检测
+          description: 用户想知道某个时间段、某个通道是否发生了交通异常或拥堵，例如"2024年1月马六甲海峡有没有异常？"、"是否拥堵"
+        - id: cls_analysis
+          name: 原因分析
+          description: 用户想了解异常或拥堵发生的原因，例如"2023年12月曼德海峡为什么异常？"、"请分析原因"
+        - id: cls_other
+          name: 其他问题
+          description: 与海峡交通无关的问题，或者打招呼、闲聊、不包含具体通道和时间信息的问题
+        model:
+          completion_params:
+            temperature: 0.2
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        query_variable_selector:
+        - sys
+        - query
+        selected: false
+        title: 问题分类
+        type: question-classifier
+        topics: []
+      height: 160
+      id: node_question_classifier
+      position:
+        x: 380
+        y: 140
+      positionAbsolute:
+        x: 380
+        y: 140
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH: LLM Extract
+    # ─────────────────────────────────────────
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 50
+        model:
+          completion_params:
+            temperature: 0.3
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: extract-sys-prompt
+          role: system
+          text: "你是一个信息提取助手。从用户的问题中提取以下信息：\n- 年份 (year)\n- 月份 (month)\n- 地点/通道名称 (location)\n\
+            \n请以JSON格式返回提取的信息：\n{\n  \"year\": \"YYYY\",\n  \"month\": \"MM\",\n  \"\
+            location\": \"地点名称\"\n}\n\n如果某个信息缺失，请使用null。\n只返回JSON，不要添加其他解释。"
+        - id: extract-user-prompt
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              location:
+                description: 通道名称，如曼德海峡或马六甲海峡
+                type: string
+              month:
+                description: 月份，格式MM或M
+                type: string
+              year:
+                description: 年份，格式YYYY
+                type: string
+            required:
+            - year
+            - month
+            - location
+            type: object
+        structured_output_enabled: true
+        title: 提取时间和地点（检测）
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: node_llm_extract
+      position:
+        x: 700
+        y: 20
+      positionAbsolute:
+        x: 700
+        y: 20
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH: detectCongestion Tool
+    # ─────────────────────────────────────────
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 用中文提出的问题，包含年月和通道名称
+            zh_Hans: 用中文提出的问题，包含年月和通道名称
+          label:
+            en_US: question
+            zh_Hans: question
+          llm_description: 用中文提出的问题，包含年月和通道名称
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 用中文提出的问题，包含年月和通道名称
+            zh_Hans: 用中文提出的问题，包含年月和通道名称
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          question: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 826cccc6-09f9-4436-af6c-6d2e80674e14
+        provider_name: Detect Traffic Congestion Tool
+        provider_type: api
+        selected: false
+        title: detectCongestion
+        tool_configurations: {}
+        tool_description: 检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡
+        tool_label: detectCongestion
+        tool_name: detectCongestion
+        tool_node_version: '2'
+        tool_parameters:
+          question:
+            type: mixed
+            value: '{{#node_llm_extract.structured_output.year#}}年{{#node_llm_extract.structured_output.month#}}月
+              {{#node_llm_extract.structured_output.location#}}是否发生拥堵'
+        type: tool
+      height: 50
+      id: node_detect_tool
+      position:
+        x: 1010
+        y: 20
+      positionAbsolute:
+        x: 1010
+        y: 20
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH: Parse Detection Result
+    # ─────────────────────────────────────────
+    - data:
+        code: "import json\n\ndef main(detection_result: str) -> dict:\n    result\
+          \ = json.loads(detection_result)\n    if_anomaly: bool = result.get(\"if_anomaly\"\
+          , False)\n    run_date: str = result.get(\"run_date\", \"\")\n    pipe_name:\
+          \ str = result.get(\"pipe_name\", \"\")\n    result_text: str = result.get(\"\
+          result\", \"\")\n    return {\n        \"if_anomaly\": if_anomaly,\n    \
+          \    \"run_date\": run_date,\n        \"pipe_name\": pipe_name,\n        \"\
+          result\": result_text\n    }"
+        code_language: python3
+        desc: 解析检测结果，提取异常标志
+        outputs:
+          if_anomaly:
+            children: null
+            type: boolean
+          pipe_name:
+            children: null
+            type: string
+          result:
+            children: null
+            type: string
+          run_date:
+            children: null
+            type: string
+        selected: false
+        title: 解析检测结果
+        type: code
+        variables:
+        - value_selector:
+          - node_detect_tool
+          - text
+          value_type: string
+          variable: detection_result
+      height: 78
+      id: node_parse_detection
+      position:
+        x: 1320
+        y: 20
+      positionAbsolute:
+        x: 1320
+        y: 20
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH: IF/ELSE (anomaly?)
+    # ─────────────────────────────────────────
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: is
+            id: ifelse-condition-anomaly
+            value: true
+            varType: boolean
+            variable_selector:
+            - node_parse_detection
+            - if_anomaly
+          id: 'true'
+          logical_operator: and
+        selected: false
+        title: 是否发生异常？
+        type: if-else
+      height: 122
+      id: node_ifelse_anomaly
+      position:
+        x: 1630
+        y: 20
+      positionAbsolute:
+        x: 1630
+        y: 20
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH (anomaly=true): analyzeAnomalyReason Tool
+    # ─────────────────────────────────────────
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 用中文提出的问题，包含年月、通道名称和分析请求
+            zh_Hans: 用中文提出的问题，包含年月、通道名称和分析请求
+          label:
+            en_US: question
+            zh_Hans: question
+          llm_description: 用中文提出的问题，包含年月、通道名称和分析请求
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 用中文提出的问题，包含年月、通道名称和分析请求
+            zh_Hans: 用中文提出的问题，包含年月、通道名称和分析请求
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          question: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 4c61f38d-146d-4959-9dbb-3b0a862f4e12
+        provider_name: Analyze traffic anomly
+        provider_type: api
+        selected: false
+        title: analyzeAnomalyReason（检测后）
+        tool_configurations: {}
+        tool_description: 深度分析交通异常原因，结合天气、新闻等信息给出详细解释
+        tool_label: analyzeAnomalyReason
+        tool_name: analyzeAnomalyReason
+        tool_node_version: '2'
+        tool_parameters:
+          question:
+            type: mixed
+            value: 请分析 {{#node_parse_detection.run_date#}} {{#node_parse_detection.pipe_name#}}
+              发生拥堵的原因
+        type: tool
+      height: 50
+      id: node_analyze_tool
+      position:
+        x: 1940
+        y: -100
+      positionAbsolute:
+        x: 1940
+        y: -100
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH (anomaly=true): Parse Reason
+    # ─────────────────────────────────────────
+    - data:
+        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    data =\
+          \ json.loads(analysis_result)\n    success = data.get(\"success\", False)\n\
+          \    result = data.get(\"result\", \"\")\n    run_date = data.get(\"run_date\"\
+          , \"\")\n    pipe_name = data.get(\"pipe_name\", \"\")\n    return {\n \
+          \       \"success\": success,\n        \"reason\": result,\n        \"run_date\"\
+          : run_date,\n        \"pipe_name\": pipe_name\n    }\n"
+        code_language: python3
+        desc: 解析原因分析结果
+        outputs:
+          pipe_name:
+            children: null
+            type: string
+          reason:
+            children: null
+            type: string
+          run_date:
+            children: null
+            type: string
+          success:
+            children: null
+            type: boolean
+        selected: false
+        title: 解析原因（检测后）
+        type: code
+        variables:
+        - value_selector:
+          - node_analyze_tool
+          - text
+          value_type: string
+          variable: analysis_result
+      height: 78
+      id: node_parse_reason
+      position:
+        x: 2250
+        y: -100
+      positionAbsolute:
+        x: 2250
+        y: -100
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH (anomaly=true): Streaming LLM Answer
+    # ─────────────────────────────────────────
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: answer-anomaly-sys
+          role: system
+          text: "你是一个专业的海峡交通异常分析助手。请根据以下检测和分析数据，用流畅自然的中文回答用户的问题。\n\n检测数据：\n- 通道：{{#node_parse_detection.pipe_name#}}\n\
+            - 时间：{{#node_parse_detection.run_date#}}\n- 检测结论：{{#node_parse_detection.result#}}\n\
+            - 是否异常：是\n\n异常原因分析：\n{{#node_parse_reason.reason#}}\n\n请综合以上信息，给出清晰、专业的回答。先说明检测结论，再解释原因。"
+        - id: answer-anomaly-user
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: 生成检测+原因回答（流式）
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: node_llm_answer_anomaly
+      position:
+        x: 2560
+        y: -100
+      positionAbsolute:
+        x: 2560
+        y: -100
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH (anomaly=false): Streaming LLM Answer
+    # ─────────────────────────────────────────
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: answer-no-anomaly-sys
+          role: system
+          text: "你是一个专业的海峡交通异常分析助手。请根据以下检测数据，用流畅自然的中文回答用户的问题。\n\n检测数据：\n- 通道：{{#node_parse_detection.pipe_name#}}\n\
+            - 时间：{{#node_parse_detection.run_date#}}\n- 检测结论：{{#node_parse_detection.result#}}\n\
+            - 是否异常：否\n\n该时间段内未检测到明显的交通异常。请给出简洁、专业的回答，告知用户检测结果正常。"
+        - id: answer-no-anomaly-user
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: 生成无异常回答（流式）
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: node_llm_answer_no_anomaly
+      position:
+        x: 1940
+        y: 160
+      positionAbsolute:
+        x: 1940
+        y: 160
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # DETECTION BRANCH: Answer Node
+    # ─────────────────────────────────────────
+    - data:
+        answer: '{{#node_llm_answer_anomaly.text#}}{{#node_llm_answer_no_anomaly.text#}}'
+        selected: false
+        title: 检测结果回答
+        type: answer
+        variables: []
+      height: 78
+      id: node_answer_detection
+      position:
+        x: 2870
+        y: 20
+      positionAbsolute:
+        x: 2870
+        y: 20
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # ANALYSIS BRANCH: LLM Extract (analysis)
+    # ─────────────────────────────────────────
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 50
+        model:
+          completion_params:
+            temperature: 0.3
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: extract-analysis-sys
+          role: system
+          text: "你是一个信息提取助手。从用户的问题中提取以下信息：\n- 年份 (year)\n- 月份 (month)\n- 地点/通道名称 (location)\n\
+            \n请以JSON格式返回提取的信息：\n{\n  \"year\": \"YYYY\",\n  \"month\": \"MM\",\n  \"\
+            location\": \"地点名称\"\n}\n\n如果某个信息缺失，请使用null。\n只返回JSON，不要添加其他解释。"
+        - id: extract-analysis-user
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              location:
+                description: 通道名称，如曼德海峡或马六甲海峡
+                type: string
+              month:
+                description: 月份，格式MM或M
+                type: string
+              year:
+                description: 年份，格式YYYY
+                type: string
+            required:
+            - year
+            - month
+            - location
+            type: object
+        structured_output_enabled: true
+        title: 提取时间和地点（分析）
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: node_llm_extract_analysis
+      position:
+        x: 700
+        y: 340
+      positionAbsolute:
+        x: 700
+        y: 340
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # ANALYSIS BRANCH: analyzeAnomalyReason Tool (direct)
+    # ─────────────────────────────────────────
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 用中文提出的问题，包含年月、通道名称和分析请求
+            zh_Hans: 用中文提出的问题，包含年月、通道名称和分析请求
+          label:
+            en_US: question
+            zh_Hans: question
+          llm_description: 用中文提出的问题，包含年月、通道名称和分析请求
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 用中文提出的问题，包含年月、通道名称和分析请求
+            zh_Hans: 用中文提出的问题，包含年月、通道名称和分析请求
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          question: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 4c61f38d-146d-4959-9dbb-3b0a862f4e12
+        provider_name: Analyze traffic anomly
+        provider_type: api
+        selected: false
+        title: analyzeAnomalyReason（直接）
+        tool_configurations: {}
+        tool_description: 深度分析交通异常原因，结合天气、新闻等信息给出详细解释
+        tool_label: analyzeAnomalyReason
+        tool_name: analyzeAnomalyReason
+        tool_node_version: '2'
+        tool_parameters:
+          question:
+            type: mixed
+            value: 请分析 {{#node_llm_extract_analysis.structured_output.year#}}年{{#node_llm_extract_analysis.structured_output.month#}}月
+              {{#node_llm_extract_analysis.structured_output.location#}} 发生拥堵的原因
+        type: tool
+      height: 50
+      id: node_analyze_tool_direct
+      position:
+        x: 1010
+        y: 340
+      positionAbsolute:
+        x: 1010
+        y: 340
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # ANALYSIS BRANCH: Parse Reason (direct)
+    # ─────────────────────────────────────────
+    - data:
+        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    data =\
+          \ json.loads(analysis_result)\n    success = data.get(\"success\", False)\n\
+          \    result = data.get(\"result\", \"\")\n    run_date = data.get(\"run_date\"\
+          , \"\")\n    pipe_name = data.get(\"pipe_name\", \"\")\n    return {\n \
+          \       \"success\": success,\n        \"reason\": result,\n        \"run_date\"\
+          : run_date,\n        \"pipe_name\": pipe_name\n    }\n"
+        code_language: python3
+        desc: 解析原因分析结果（直接）
+        outputs:
+          pipe_name:
+            children: null
+            type: string
+          reason:
+            children: null
+            type: string
+          run_date:
+            children: null
+            type: string
+          success:
+            children: null
+            type: boolean
+        selected: false
+        title: 解析原因（直接）
+        type: code
+        variables:
+        - value_selector:
+          - node_analyze_tool_direct
+          - text
+          value_type: string
+          variable: analysis_result
+      height: 78
+      id: node_parse_reason_direct
+      position:
+        x: 1320
+        y: 340
+      positionAbsolute:
+        x: 1320
+        y: 340
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # ANALYSIS BRANCH: Streaming LLM Answer
+    # ─────────────────────────────────────────
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: answer-analysis-sys
+          role: system
+          text: "你是一个专业的海峡交通异常分析助手。请根据以下原因分析数据，用流畅自然的中文深入回答用户的问题。\n\n分析数据：\n- 通道：{{#node_parse_reason_direct.pipe_name#}}\n\
+            - 时间：{{#node_parse_reason_direct.run_date#}}\n- 原因分析：{{#node_parse_reason_direct.reason#}}\n\
+            \n请给出深入、专业的原因分析回答，可以结合背景知识进行补充说明。"
+        - id: answer-analysis-user
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: 生成原因分析回答（流式）
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: node_llm_answer_analysis
+      position:
+        x: 1630
+        y: 340
+      positionAbsolute:
+        x: 1630
+        y: 340
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # ANALYSIS BRANCH: Answer Node
+    # ─────────────────────────────────────────
+    - data:
+        answer: '{{#node_llm_answer_analysis.text#}}'
+        selected: false
+        title: 原因分析回答
+        type: answer
+        variables: []
+      height: 78
+      id: node_answer_analysis
+      position:
+        x: 1940
+        y: 340
+      positionAbsolute:
+        x: 1940
+        y: 340
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # FALLBACK BRANCH: LLM (other questions)
+    # ─────────────────────────────────────────
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: gpt-4o
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: fallback-sys
+          role: system
+          text: "你是一个专注于马六甲海峡和曼德海峡交通异常分析的专家助手。\n你只能回答与这两个海峡的交通异常检测和原因分析相关的问题。\n\
+            \n对于其他问题，请礼貌地说明你的专业范围，并引导用户提问正确的问题。\n\n你可以回答的问题示例：\n- \"2024年1月马六甲海峡是否发生了异常？\"\
+            \n- \"2023年12月曼德海峡为什么发生交通异常？\"\n\n请用友好、专业的语气回复。"
+        - id: fallback-user
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: 闲聊/范围外问题回复（流式）
+        type: llm
+        vision:
+          enabled: false
+      height: 86
+      id: node_llm_fallback
+      position:
+        x: 700
+        y: 560
+      positionAbsolute:
+        x: 700
+        y: 560
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    # ─────────────────────────────────────────
+    # FALLBACK BRANCH: Answer Node
+    # ─────────────────────────────────────────
+    - data:
+        answer: '{{#node_llm_fallback.text#}}'
+        selected: false
+        title: 范围外回答
+        type: answer
+        variables: []
+      height: 78
+      id: node_answer_fallback
+      position:
+        x: 1010
+        y: 560
+      positionAbsolute:
+        x: 1010
+        y: 560
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+
+    viewport:
+      x: -60
+      y: 80
+      zoom: 0.6
+  rag_pipeline_variables: []
