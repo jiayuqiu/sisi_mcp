@@ -6,6 +6,7 @@
 
 ```bash
 $ git clone https://github.com/langgenius/dify.git
+$ git checkout -b release/e-1.11.4 origin/release/e-1.11.4
 ```
 
 ### 1.2 docker compose up
@@ -41,4 +42,36 @@ $ cp .env.example .env
 $ # Replace 3 tokens.
 ```
 
-### 2.2 
+### 2.2 start up
+
+```bash
+$ docker compose up -d
+```
+
+## 3. Set frontend_nextjs
+
+### 3.1 install nodejs
+
+Please refer to `https://nodejs.org/en/download`
+
+### 3.2 Set .env.local
+
+```bash
+$ cd frontend_nextjs
+$ cp .env.local.example .env.local
+$ vim .env.local
+
+# replace DIFY_API_KEY with your api token
+# The token is generated in Section $2
+```
+
+### 3.2 start frontend
+
+```
+$ cd frontend_nextjs
+$ npm install  # just for first run
+$ npm run dev  # run in dev mode
+
+## 4. Done
+
+Browser http://localhost:3000 to chat with sisi-expert.

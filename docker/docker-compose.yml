@@ -22,6 +22,9 @@ services:
       - ../tmp:/app/tmp
     command: uv run python mcp_server_http.py
     restart: unless-stopped
+    networks:
+      - default
+      - dify_platform
 
   dify_api_server:
     build:
@@ -43,6 +46,9 @@ services:
     restart: unless-stopped
     depends_on:
       - mcp_server
+    networks:
+      - default
+      - dify_platform
 
   # frontend:
   #   build:
@@ -59,3 +65,8 @@ services:
   #     - ../tmp:/app/tmp
   #   command: uv run python frontend/app.py
   #   restart: unless-stopped
+networks:
+  default: {}
+  dify_platform:
+    external: true
+    name: sisi-dify-platform_default

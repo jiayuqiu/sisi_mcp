@@ -115,7 +115,7 @@ def plot_ship_congestion(run_date: str, pipe_name: str, month: int = 3, day: int
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     safe_name = _safe_filename(pipe_name)
 
-    output_dir = "C:\\Users\\qiuji\\Downloads"
+    # output_dir = "C:\\Users\\qiuji\\Downloads"
     output_path = os.path.join(output_dir, f"congestion_plot_{safe_name}_{timestamp}.png")
     plt.savefig(output_path)
     plt.close()
