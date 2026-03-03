@@ -48,6 +48,43 @@ $ # Replace 3 tokens.
 $ docker compose up -d
 ```
 
+### 2.3 import chatflow & workflow & custom tool
+
+#### 2.3.1 Chatflow
+
+![import config yaml](images/import_app_yaml.png)
+
+- import config from `mcp_conductor/resources/dify/sisi_expert_chat.yml`
+- import config from `mcp_conductor/resources/dify/sisi_expert_workflow.yml`
+
+#### 2.3.2 Workflow
+
+TODO
+
+#### 2.3.3 custom tool
+
+![click create custom tool](images/create_custom_tool_step_1.png)
+![config tool](images/create_custom_tool_step_2.png)
+
+- tool config files are under `mcp_conductor/resources/dify`
+
+#### 2.3.5 Troble shoot
+
+In this dify version, Node of custom tool might lose input parameters settings. so need to delete them and re-create.
+
+- delete old nodes of custom tool
+![re-create custom tool node](images/recreate_custom_tool_node_1.png)
+
+- re-create node
+![how to add node](images/create_custom_tool_step_2.png)
+
+- setting `detectAnomaly node`
+![detect anomaly node](images/detect_anomaly_setting.png)
+
+- setting `analyzeAnomalyReason node`
+![analyzeAnomalyReason node](images/anlyze_anomaly_reason.png)
+
+
 ## 3. Set frontend_nextjs
 
 ### 3.1 install nodejs
@@ -65,7 +102,7 @@ $ vim .env.local
 # The token is generated in Section $2
 ```
 
-### 3.2 start frontend
+### 3.2 start frontend service
 
 ```
 $ cd frontend_nextjs
