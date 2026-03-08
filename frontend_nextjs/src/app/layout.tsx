@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import ChatWidget from "@/components/ChatWidget";
 
 export const metadata: Metadata = {
   title: "SisiMCP — Maritime Traffic Analysis",
@@ -19,6 +20,7 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col overflow-hidden">
           {children}
         </main>
+        <ChatWidget />
       </body>
     </html>
   );

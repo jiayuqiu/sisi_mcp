@@ -6,7 +6,6 @@ import { Ship, MessageSquare, BarChart2 } from "lucide-react";
 import { clsx } from "clsx";
 
 const navLinks = [
-  { href: "/chatbot",  label: "Chatbot",   icon: MessageSquare },
   { href: "/workflow", label: "Workflow",   icon: BarChart2 },
 ];
 

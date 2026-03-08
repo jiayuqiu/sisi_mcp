@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, User, Anchor } from "lucide-react";
+import { Send, Bot, User, Anchor, MessageSquare, X, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -54,27 +54,27 @@ function ChatBubble({ msg }: { msg: Message }) {
   return (
     <div
       className={cn(
-        "flex gap-3 animate-slide-up",
+        "flex gap-2.5 animate-slide-up",
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
       {/* Avatar */}
       <div
         className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+          "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold",
           isUser
             ? "bg-accent/20 border border-accent/40 text-accent"
             : "bg-teal-500/20 border border-teal-500/40 text-teal-400",
           !isUser && msg.streaming && "avatar-pulse"
         )}
       >
-        {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+        {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
       </div>
 
       {/* Bubble */}
       <div
         className={cn(
-          "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
           isUser
             ? "bg-accent text-white rounded-tr-sm"
             : "bg-navy-700 border border-navy-600 text-slate-200 rounded-tl-sm"
@@ -82,7 +82,9 @@ function ChatBubble({ msg }: { msg: Message }) {
       >
         {msg.streaming && <TypingIndicator />}
         {msg.content !== "" && (
-          <span className={cn("prose-chat", msg.streaming && "mt-1 block")}>{nl2br(msg.content)}</span>
+          <span className={cn("prose-chat", msg.streaming && "mt-1 block")}>
+            {nl2br(msg.content)}
+          </span>
         )}
         {msg.streaming && msg.content !== "" && (
           <span className="inline-block w-0.5 h-4 bg-teal-400 ml-0.5 animate-pulse align-middle" />
@@ -92,7 +94,7 @@ function ChatBubble({ msg }: { msg: Message }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Widget ──────────────────────────────────────────────────────────────
 
 const WELCOME_MESSAGE: Message = {
   id: "welcome",
@@ -103,8 +105,14 @@ const WELCOME_MESSAGE: Message = {
 
 const STORAGE_KEY_MESSAGES = "chatbot_messages";
 const STORAGE_KEY_CONVERSATION = "chatbot_conversation_id";
+const STORAGE_KEY_OPEN = "chatbot_open";
 
-export default function ChatbotPage() {
+export default function ChatWidget() {
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(STORAGE_KEY_OPEN) === "true";
+  });
+
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window === "undefined") return [WELCOME_MESSAGE];
     try {
@@ -124,6 +132,11 @@ export default function ChatbotPage() {
   });
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Persist open state
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEY_OPEN, String(open));
+  }, [open]);
 
   // Persist messages to sessionStorage
   useEffect(() => {
@@ -147,7 +160,7 @@ export default function ChatbotPage() {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+    ta.style.height = Math.min(ta.scrollHeight, 100) + "px";
   }, [input]);
 
   const sendMessage = useCallback(
@@ -172,7 +185,10 @@ export default function ChatbotPage() {
         const res = await fetch("/api/chat/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: trimmed, conversation_id: conversationId }),
+          body: JSON.stringify({
+            message: trimmed,
+            conversation_id: conversationId,
+          }),
         });
 
         if (!res.ok || !res.body) {
@@ -199,12 +215,10 @@ export default function ChatbotPage() {
             try {
               const json = JSON.parse(raw);
 
-              // Update conversation_id from first event
               if (json.conversation_id) {
                 setConversationId(json.conversation_id);
               }
 
-              // Accumulate streamed answer chunks
               if (json.event === "message" && json.answer) {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -215,7 +229,6 @@ export default function ChatbotPage() {
                 );
               }
 
-              // message_end — finalise
               if (json.event === "message_end") {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -229,13 +242,12 @@ export default function ChatbotPage() {
           }
         }
 
-        // Ensure streaming flag is cleared
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId ? { ...m, streaming: false } : m
           )
         );
-      } catch (err) {
+      } catch {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
@@ -262,57 +274,108 @@ export default function ChatbotPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden max-w-3xl w-full mx-auto px-4 py-4 gap-4">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1">
-        {messages.map((msg) => (
-          <ChatBubble key={msg.id} msg={msg} />
-        ))}
-        <div ref={bottomRef} />
-      </div>
+    <>
+      {/* Floating toggle button */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg",
+          open
+            ? "bg-navy-700 border border-navy-600 text-slate-400 hover:text-slate-200 scale-90"
+            : "bg-teal-500 text-white hover:bg-teal-400 shadow-teal-500/30 hover:shadow-teal-400/40",
+          loading && !open && "avatar-pulse"
+        )}
+      >
+        {open ? (
+          <X className="w-5 h-5" />
+        ) : (
+          <MessageSquare className="w-5 h-5" />
+        )}
+      </button>
 
-      {/* Suggested questions (only when no user messages yet) */}
-      {messages.length === 1 && (
-        <div className="flex flex-wrap gap-2">
-          {SUGGESTED.map((q) => (
-            <button
-              key={q}
-              onClick={() => sendMessage(q)}
-              className="text-xs px-3 py-1.5 rounded-full border border-teal-500/30 text-teal-400 hover:bg-teal-500/10 transition-colors"
-            >
-              {q}
-            </button>
-          ))}
+      {/* Chat panel */}
+      <div
+        className={cn(
+          "fixed bottom-20 right-6 z-50 w-[420px] max-h-[600px] flex flex-col rounded-2xl border border-navy-600 bg-navy-800 shadow-2xl shadow-black/40 transition-all duration-300 origin-bottom-right",
+          open
+            ? "scale-100 opacity-100 pointer-events-auto"
+            : "scale-95 opacity-0 pointer-events-none"
+        )}
+      >
+        {/* Panel header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-navy-700 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center">
+              <Bot className="w-3.5 h-3.5 text-teal-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white leading-tight">
+                Chatbot
+              </h3>
+              <p className="text-[10px] text-slate-500 leading-tight">
+                Maritime anomaly detection
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-300 hover:bg-navy-700 transition-colors"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
         </div>
-      )}
 
-      {/* Input area */}
-      <div className="flex-shrink-0 flex items-end gap-3 bg-navy-800 border border-navy-600 rounded-2xl px-4 py-3 focus-within:border-teal-500/50 transition-colors">
-        <Anchor className="w-4 h-4 text-slate-500 mb-2 flex-shrink-0" />
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入你的问题... (Enter 发送，Shift+Enter 换行)"
-          rows={1}
-          disabled={loading}
-          className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none leading-relaxed disabled:opacity-50"
-          style={{ maxHeight: 120 }}
-        />
-        <button
-          onClick={() => sendMessage(input)}
-          disabled={loading || !input.trim()}
-          className={cn(
-            "flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150 mb-0.5",
-            input.trim() && !loading
-              ? "bg-teal-500 hover:bg-teal-400 text-white shadow-lg shadow-teal-500/20"
-              : "bg-navy-700 text-slate-600 cursor-not-allowed"
-          )}
-        >
-          <Send className="w-4 h-4" />
-        </button>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto flex flex-col gap-3 px-4 py-3 min-h-0">
+          {messages.map((msg) => (
+            <ChatBubble key={msg.id} msg={msg} />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Suggested questions */}
+        {messages.length === 1 && (
+          <div className="flex flex-wrap gap-1.5 px-4 pb-2">
+            {SUGGESTED.map((q) => (
+              <button
+                key={q}
+                onClick={() => sendMessage(q)}
+                className="text-[11px] px-2.5 py-1 rounded-full border border-teal-500/30 text-teal-400 hover:bg-teal-500/10 transition-colors"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Input area */}
+        <div className="flex-shrink-0 flex items-end gap-2.5 border-t border-navy-700 px-3 py-2.5">
+          <Anchor className="w-4 h-4 text-slate-500 mb-1.5 flex-shrink-0" />
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="输入你的问题..."
+            rows={1}
+            disabled={loading}
+            className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none leading-relaxed disabled:opacity-50"
+            style={{ maxHeight: 100 }}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={loading || !input.trim()}
+            className={cn(
+              "flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150 mb-0.5",
+              input.trim() && !loading
+                ? "bg-teal-500 hover:bg-teal-400 text-white shadow-lg shadow-teal-500/20"
+                : "bg-navy-700 text-slate-600 cursor-not-allowed"
+            )}
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
