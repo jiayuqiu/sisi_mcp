@@ -32,7 +32,7 @@ class SISIClient(BaseAIClient):
     def search_and_ask(
             self, 
             question: str, 
-            model: str = "Qwen3-14B-pre-train-awq-4bit", 
+            model: str = "Qwen3-14B-pre-train",
             web_search: bool = False, 
             temperature: float = 0.7, 
             max_tokens: int | None = None, 

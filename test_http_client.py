@@ -4,7 +4,6 @@ Test client for the MCP HTTP server.
 Demonstrates how to call the traffic detection tools via HTTP.
 """
 import requests
-import json
 
 
 def test_detect_anomaly():

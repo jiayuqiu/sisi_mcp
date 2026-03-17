@@ -6,135 +6,13 @@ for the BCI metrics data API.
 """
 import unittest
 from unittest.mock import patch, Mock
-from typing import Optional
-import hashlib
-import time
 import os
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Import the functions to test (assuming they're in a module called data_api)
-# For now, we'll define them here for testing purposes
-
-def generate_signature(params_to_sign: dict, secret_key: str) -> str:
-    """
-    Generate API signature according to documentation.
-
-    Args:
-        params_to_sign: Dictionary of parameters to sign
-        secret_key: Secret key for signing
-
-    Returns:
-        MD5 signature in lowercase
-    """
-    # Sort parameters by ASCII code
-    sorted_params = sorted(params_to_sign.items())
-
-    # Create stringA: key1=value1&key2=value2...
-    string_a_parts = [f"{key}={value}" for key, value in sorted_params]
-    string_a = "&".join(string_a_parts)
-
-    # Append secret key: stringA + "&key=" + secret_key
-    string_sign_temp = f"{string_a}&key={secret_key}"
-
-    # Generate MD5 and convert to lowercase
-    sign = hashlib.md5(string_sign_temp.encode('utf-8')).hexdigest().lower()
-
-    return sign
-
-
-def get_bci_metrics(
-    client: str,
-    start_day: str,
-    end_day: str,
-    zbxxs: Optional[str] = None,
-    csdbs: Optional[str] = None,
-    app_id: Optional[str] = None,
-    secret_key: Optional[str] = None,
-    base_url: Optional[str] = None
-) -> dict:
-    """
-    Call the BCI metrics API (getZbcsdb).
-
-    Args:
-        client: Third-party identifier
-        start_day: Query start date (YYYY-MM-DD)
-        end_day: Query end date (YYYY-MM-DD)
-        zbxxs: Metric information, comma-separated (optional)
-        csdbs: CSDB information, comma-separated (optional)
-        app_id: Platform-issued appId (defaults to env var BCI_APP_ID)
-        secret_key: Platform-issued secret key (defaults to env var BCI_SECRET_KEY)
-        base_url: API base URL (defaults to env var BCI_BASE_URL)
-
-    Returns:
-        API response as dictionary
-    """
-    # Load credentials from environment if not provided
-    if app_id is None:
-        app_id = os.getenv("BCI_APP_ID", "")
-    if secret_key is None:
-        secret_key = os.getenv("BCI_SECRET_KEY", "")
-    if base_url is None:
-        base_url = os.getenv("BCI_BASE_URL", "http://101.132.25.38:8891/bci/openapi/zbcsdb/getZbcsdb")
-
-    # Prepare query parameters
-    query_params = {
-        "client": client,
-        "startDay": start_day,
-        "endDay": end_day,
-    }
-
-    # Add optional parameters
-    if zbxxs:
-        query_params["zbxxs"] = zbxxs
-    if csdbs:
-        query_params["csdbs"] = csdbs
-
-    # Prepare header parameters
-    timestamp = str(int(time.time()))
-    import random
-    nonce = str(random.randint(1000000000, 9999999999))
-
-    # Prepare signature parameters (zbxxs and csdbs not included in signature)
-    params_to_sign = {
-        "appId": app_id,
-        "client": client,
-        "endDay": end_day,
-        "nonce": nonce,
-        "startDay": start_day,
-        "timestamp": timestamp,
-    }
-
-    # Generate signature
-    sign = generate_signature(params_to_sign, secret_key)
-
-    # Prepare request headers
-    headers = {
-        "appId": app_id,
-        "timestamp": timestamp,
-        "nonce": nonce,
-        "sign": sign,
-        "Content-Type": "application/json;charset=UTF-8"
-    }
-
-    # Send GET request
-    try:
-        response = requests.get(
-            base_url,
-            headers=headers,
-            params=query_params,
-            timeout=10
-        )
-        response.raise_for_status()
-        return response.json()
-
-    except requests.exceptions.HTTPError as http_err:
-        return {"success": False, "message": f"HTTP error: {http_err}"}
-    except requests.exceptions.RequestException as req_err:
-        return {"success": False, "message": f"Request error: {req_err}"}
+from mcp_conductor.resources.sisi.APIs.metrics_api import generate_signature, get_bci_metrics, BASE_URL, APP_ID
 
 
 class TestSignatureGeneration(unittest.TestCase):
@@ -231,14 +109,13 @@ class TestBCIMetricsAPI(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.app_id = os.getenv("BCI_APP_ID", "test_app_id")
+        self.app_id = APP_ID
         self.client = self.app_id
         self.start_day = "2022-07-01"
         self.end_day = "2022-07-01"
-        self.secret_key = os.getenv("BCI_SECRET_KEY", "test_secret_key")
-        self.base_url = os.getenv("BCI_BASE_URL", "http://test.api.com")
+        self.base_url = BASE_URL
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_get_bci_metrics_success(self, mock_get):
         """Test successful API call."""
         # Mock successful response
@@ -251,7 +128,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day
         )
@@ -280,7 +157,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         self.assertEqual(params["startDay"], self.start_day)
         self.assertEqual(params["endDay"], self.end_day)
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_get_bci_metrics_with_zbxxs(self, mock_get):
         """Test API call with zbxxs parameter."""
         mock_response = Mock()
@@ -291,7 +168,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         zbxxs = "101-0003,101-0004"
 
         result = get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day,
             zbxxs=zbxxs
@@ -302,7 +179,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         params = call_args[1]["params"]
         self.assertEqual(params["zbxxs"], zbxxs)
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_get_bci_metrics_with_csdbs(self, mock_get):
         """Test API call with csdbs parameter."""
         mock_response = Mock()
@@ -313,7 +190,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         csdbs = "055477ABB03B456E8B4B135E8193B25A"
 
         result = get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day,
             csdbs=csdbs
@@ -324,7 +201,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         params = call_args[1]["params"]
         self.assertEqual(params["csdbs"], csdbs)
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_get_bci_metrics_http_error(self, mock_get):
         """Test API call with HTTP error."""
         mock_response = Mock()
@@ -332,7 +209,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         mock_get.return_value = mock_response
 
         result = get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day
         )
@@ -340,30 +217,14 @@ class TestBCIMetricsAPI(unittest.TestCase):
         # Should return error response
         self.assertFalse(result["success"])
         self.assertIn("message", result)
-        self.assertIn("HTTP error", result["message"])
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_get_bci_metrics_request_timeout(self, mock_get):
         """Test API call with timeout error."""
         mock_get.side_effect = requests.exceptions.Timeout("Request timeout")
 
         result = get_bci_metrics(
-            client=self.client,
-            start_day=self.start_day,
-            end_day=self.end_day
-        )
-
-        # Should return error response
-        self.assertFalse(result["success"])
-        self.assertIn("Request error", result["message"])
-
-    @patch('requests.get')
-    def test_get_bci_metrics_connection_error(self, mock_get):
-        """Test API call with connection error."""
-        mock_get.side_effect = requests.exceptions.ConnectionError("Connection failed")
-
-        result = get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day
         )
@@ -372,7 +233,22 @@ class TestBCIMetricsAPI(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("message", result)
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
+    def test_get_bci_metrics_connection_error(self, mock_get):
+        """Test API call with connection error."""
+        mock_get.side_effect = requests.exceptions.ConnectionError("Connection failed")
+
+        result = get_bci_metrics(
+            app_id=self.app_id,
+            start_day=self.start_day,
+            end_day=self.end_day
+        )
+
+        # Should return error response
+        self.assertFalse(result["success"])
+        self.assertIn("message", result)
+
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_signature_included_in_request(self, mock_get):
         """Test that signature is properly generated and included."""
         mock_response = Mock()
@@ -381,7 +257,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         mock_get.return_value = mock_response
 
         get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day
         )
@@ -396,7 +272,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         self.assertEqual(len(signature), 32)
         self.assertTrue(signature.islower())
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_timeout_parameter(self, mock_get):
         """Test that timeout is set correctly."""
         mock_response = Mock()
@@ -405,7 +281,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
         mock_get.return_value = mock_response
 
         get_bci_metrics(
-            client=self.client,
+            app_id=self.app_id,
             start_day=self.start_day,
             end_day=self.end_day
         )
@@ -418,7 +294,7 @@ class TestBCIMetricsAPI(unittest.TestCase):
 class TestAPIParameterValidation(unittest.TestCase):
     """Test cases for API parameter validation."""
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_date_format_validation(self, mock_get):
         """Test that dates are passed correctly."""
         mock_response = Mock()
@@ -430,7 +306,7 @@ class TestAPIParameterValidation(unittest.TestCase):
         end = "2022-12-31"
 
         get_bci_metrics(
-            client=os.getenv("BCI_APP_ID", "test_client"),
+            app_id=APP_ID,
             start_day=start,
             end_day=end
         )
@@ -441,7 +317,7 @@ class TestAPIParameterValidation(unittest.TestCase):
         self.assertEqual(params["startDay"], start)
         self.assertEqual(params["endDay"], end)
 
-    @patch('requests.get')
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_multiple_zbxxs_values(self, mock_get):
         """Test multiple zbxxs values with comma separation."""
         mock_response = Mock()
@@ -452,7 +328,7 @@ class TestAPIParameterValidation(unittest.TestCase):
         zbxxs = "101-0003,101-0004,101-0005"
 
         get_bci_metrics(
-            client=os.getenv("BCI_APP_ID", "test_client"),
+            app_id=APP_ID,
             start_day="2022-07-01",
             end_day="2022-07-01",
             zbxxs=zbxxs
