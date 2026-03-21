@@ -65,6 +65,27 @@ services:
   #     - ../tmp:/app/tmp
   #   command: uv run python frontend/app.py
   #   restart: unless-stopped
+
+  frontend_nextjs:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: sisimcp-frontend-nextjs
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DIFY_API_KEY=${DIFY_API_KEY}
+      - DIFY_CHATFLOW_URL=${DIFY_CHATFLOW_URL}
+      - SQLITE_DB_PATH=/app/data/sisi.sqlite
+    volumes:
+      - ../data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - dify_api_server
+    networks:
+      - default
+      - dify_platform
 networks:
   default: {}
   dify_platform:

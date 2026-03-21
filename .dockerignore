@@ -1,0 +1,19 @@
+# Node.js
+frontend_nextjs/node_modules
+frontend_nextjs/.next
+
+# Python
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+
+# Misc
+.git
+.gitignore
+*.md
+.env
+.env.*
+tmp/

@@ -1,10 +1,11 @@
-import os
-import requests
 import hashlib
-import time
-import random
 import logging
-from typing import Optional, Dict, Any
+import os
+import random
+import time
+from typing import Any, Dict, Optional
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,6 +17,7 @@ APP_ID = os.getenv("BCI_APP_ID", "")
 SECRET_KEY = os.getenv("BCI_SECRET_KEY", "")
 
 # --- 签名函数 ---
+
 
 def generate_signature(params_to_sign: Dict[str, str], secret_key: str) -> str:
     """
@@ -37,19 +39,20 @@ def generate_signature(params_to_sign: Dict[str, str], secret_key: str) -> str:
     string_sign_temp = f"{string_a}&key={secret_key}"
 
     # 对 stringSignTemp 进行 MD5，并转换为小写 [cite: 25, 45]
-    sign = hashlib.md5(string_sign_temp.encode('utf-8')).hexdigest().lower()
+    sign = hashlib.md5(string_sign_temp.encode("utf-8")).hexdigest().lower()
 
     return sign
 
 
 # --- API 调用函数 ---
 
+
 def get_bci_metrics(
     app_id: str,
     start_day: str,
     end_day: str,
     zbxxs: Optional[str] = None,
-    csdbs: Optional[str] = None
+    csdbs: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     调用获取指标接口 (getZbcsdb)。
@@ -111,7 +114,7 @@ def get_bci_metrics(
         "timestamp": timestamp,  # [cite: 49]
         "nonce": nonce,  # [cite: 50]
         "sign": sign,  # [cite: 51]
-        "Content-Type": "application/json;charset=UTF-8"  # 推荐做法
+        "Content-Type": "application/json;charset=UTF-8",  # 推荐做法
     }
 
     # --- 4. 发送 GET 请求 ---
@@ -128,7 +131,7 @@ def get_bci_metrics(
             BASE_URL,
             headers=headers,
             params=query_params,
-            timeout=10  # 10秒超时
+            timeout=10,  # 10秒超时
         )
 
         # 检查 HTTP 状态码
@@ -148,6 +151,7 @@ def get_bci_metrics(
 
 class MetricsAPI(object):
     """SISI Indicator data api"""
+
     def __init__(self):
         self.app_id = APP_ID
         self.secret_key = SECRET_KEY
@@ -155,12 +159,14 @@ class MetricsAPI(object):
 
         if (self.app_id == "") or (self.secret_key == "") or (self.base_url == ""):
             raise ValueError(
-                f"APP_ID is EMPTY -> {self.app_id == ''}. \n" + \
-                f"SECRET_KEY is EMPTY -> {self.secret_key == ''} \n" + \
-                f"BASE_URL is EMPTY -> {self.base_url == ''}"
+                f"APP_ID is EMPTY -> {self.app_id == ''}. \n"
+                + f"SECRET_KEY is EMPTY -> {self.secret_key == ''} \n"
+                + f"BASE_URL is EMPTY -> {self.base_url == ''}"
             )
 
-    def _build_signature_params(self, start_day: str, end_day: str) -> tuple[Dict[str, str], str, str]:
+    def _build_signature_params(
+        self, start_day: str, end_day: str
+    ) -> tuple[Dict[str, str], str, str]:
         """Build signature params and return (params_to_sign, timestamp, nonce)."""
         timestamp = str(int(time.time()))
         nonce = str(random.randint(1000000000, 9999999999))
@@ -174,11 +180,12 @@ class MetricsAPI(object):
         }
         return params_to_sign, timestamp, nonce
 
-    def get_canal_traffic(self,
-                          start_date: str,
-                          end_date: str,
-                          zbxxs_val: str = "101-0003,101-0004") -> Dict[str, Any]:
-        params_to_sign, timestamp, nonce = self._build_signature_params(start_date, end_date)
+    def get_canal_traffic(
+        self, start_date: str, end_date: str, zbxxs_val: str = "101-0003,101-0004"
+    ) -> Dict[str, Any]:
+        params_to_sign, timestamp, nonce = self._build_signature_params(
+            start_date, end_date
+        )
         sign = generate_signature(params_to_sign, self.secret_key)
 
         headers = {
@@ -211,53 +218,3 @@ class MetricsAPI(object):
             logger.error("请求错误: %s", req_err)
 
         return {"success": False, "message": "请求失败"}
-
-
-
-# if __name__ == "__main__":
-#     # 示例 1：查询第三方配置的所有指标信息
-#     # 使用文档中的示例参数 [cite: 6]
-#     print("\n=== 示例 1: 查询所有指标 ===")
-#     client_val = APP_ID
-#     start_val = "2026-01-01"
-#     end_val = "2026-01-05"
-
-#     response_1 = get_bci_metrics(
-#         app_id=client_val,
-#         start_day=start_val,
-#         end_day=end_val
-#     )
-
-#     print("\n--- 响应结果 1 ---")
-#     # 使用 json.dumps 美化输出
-#     print(json.dumps(response_1, indent=2, ensure_ascii=False))
-
-#     # 示例 2：仅查询第三方配置的 zbxxs 指标信息
-#     print("\n=== 示例 2: 按 zbxxs 查询 ===")
-#     # 假设我们要查询 zbxx [cite: 67] 和 zbxx [cite: 83]
-#     zbxxs_val = "101-0003,101-0004"
-
-#     response_2 = get_bci_metrics(
-#         app_id=client_val,
-#         start_day=start_val,
-#         end_day=end_val,
-#         zbxxs=zbxxs_val
-#     )
-
-#     print("\n--- 响应结果 2 ---")
-#     print(json.dumps(response_2, indent=2, ensure_ascii=False))
-
-#     # 示例 3：仅查询第三方配置的 csdbs 指标信息
-#     print("\n=== 示例 3: 按 csdbs 查询 ===")
-#     # 假设我们要查询 csdb [cite: 69]
-#     csdbs_val = "055477ABB03B456E8B4B135E8193B25A"
-
-#     response_3 = get_bci_metrics(
-#         app_id=client_val,
-#         start_day=start_val,
-#         end_day=end_val,
-#         csdbs=csdbs_val
-#     )
-
-#     print("\n--- 响应结果 3 ---")
-#     print(json.dumps(response_3, indent=2, ensure_ascii=False))

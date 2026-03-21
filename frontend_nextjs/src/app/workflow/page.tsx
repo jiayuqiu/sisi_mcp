@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import ShipCntChart from "@/components/ShipCntChart";
 import {
   RefreshCw,
   ChevronLeft,
@@ -47,7 +48,7 @@ function Badge({ type }: { type: string | null }) {
     <span
       className={cn(
         "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border font-medium",
-        cls
+        cls,
       )}
     >
       <Tag className="w-3 h-3" />
@@ -79,7 +80,7 @@ function LogCard({ log }: { log: LogEntry }) {
     <div
       className={cn(
         "group rounded-xl border border-navy-700 bg-navy-800/80 transition-all duration-200",
-        "hover:border-navy-600 hover:bg-navy-800"
+        "hover:border-navy-600 hover:bg-navy-800",
       )}
     >
       {/* Card header */}
@@ -104,9 +105,11 @@ function LogCard({ log }: { log: LogEntry }) {
               Content
             </div>
             <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-              {expanded ? log.content : contentPreview ?? (
-                <span className="text-slate-600 italic">No content</span>
-              )}
+              {expanded
+                ? log.content
+                : (contentPreview ?? (
+                    <span className="text-slate-600 italic">No content</span>
+                  ))}
             </p>
           </div>
         )}
@@ -121,9 +124,9 @@ function LogCard({ log }: { log: LogEntry }) {
             <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap bg-navy-900/50 rounded-lg px-3 py-2.5 border border-navy-700/50">
               {expanded
                 ? log.reasoning_content
-                : reasoningPreview ?? (
+                : (reasoningPreview ?? (
                     <span className="text-slate-600 italic">No reasoning</span>
-                  )}
+                  ))}
             </p>
           </div>
         )}
@@ -168,7 +171,7 @@ export default function WorkflowPage() {
     setError(null);
     try {
       const res = await fetch(
-        `/api/workflow-logs?limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`
+        `/api/workflow-logs?limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`,
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: LogsResponse = await res.json();
@@ -187,6 +190,9 @@ export default function WorkflowPage() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden px-6 py-5 gap-5 max-w-4xl mx-auto w-full">
+      {/* Ship count chart */}
+      <ShipCntChart />
+
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -194,10 +200,10 @@ export default function WorkflowPage() {
             <Activity className="w-4.5 h-4.5 text-teal-400" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-white">Workflow Inspector</h1>
-            <p className="text-xs text-slate-500">
-              {total} agent call records
-            </p>
+            <h1 className="text-lg font-semibold text-white">
+              Workflow Inspector
+            </h1>
+            <p className="text-xs text-slate-500">{total} agent call records</p>
           </div>
         </div>
         <button
@@ -207,7 +213,7 @@ export default function WorkflowPage() {
             "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm transition-all",
             "border border-navy-600 text-slate-400",
             "hover:text-teal-400 hover:border-teal-500/30 hover:bg-teal-500/5",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
+            "disabled:opacity-50 disabled:cursor-not-allowed",
           )}
         >
           <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
@@ -254,7 +260,7 @@ export default function WorkflowPage() {
               "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
               "border border-navy-600 text-slate-400",
               "hover:text-slate-200 hover:border-navy-500",
-              "disabled:opacity-40 disabled:cursor-not-allowed"
+              "disabled:opacity-40 disabled:cursor-not-allowed",
             )}
           >
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -267,7 +273,7 @@ export default function WorkflowPage() {
               "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
               "border border-navy-600 text-slate-400",
               "hover:text-slate-200 hover:border-navy-500",
-              "disabled:opacity-40 disabled:cursor-not-allowed"
+              "disabled:opacity-40 disabled:cursor-not-allowed",
             )}
           >
             Next
