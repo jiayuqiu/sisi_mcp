@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import Database from "better-sqlite3";
 
-const DB_PATH = path.resolve(process.cwd(), "..", "data", "sisi.sqlite");
+const DB_PATH = process.env.SQLITE_DB_PATH ?? path.resolve(process.cwd(), "..", "data", "sisi.sqlite");
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;

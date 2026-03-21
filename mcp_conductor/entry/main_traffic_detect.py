@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
-from mcp_conductor.resources.sisi.APIs.LLM import SISIClient
+# from mcp_conductor.resources.sisi.APIs.LLM import SISIClient
 from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
 from mcp_conductor.resources.tools import remove_think_tag
 from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
@@ -53,7 +53,7 @@ def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
 
     # deepseek client
     ds_client = DeepSeekClient()
-    sisi_client = SISIClient()
+    # sisi_client = SISIClient()
 
     # for each changepoints, request deepseek web search to find out the reason.
     detection_records = []

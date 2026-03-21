@@ -30,22 +30,20 @@ class SISIClient(BaseAIClient):
         }
     
     def search_and_ask(
-            self, 
-            question: str, 
+            self,
+            question: str,
             model: str = "Qwen3-14B-pre-train",
-            web_search: bool = False, 
-            temperature: float = 0.7, 
-            max_tokens: int | None = None, 
+            temperature: float = 0.7,
+            max_tokens: int = 1024,
             stream: bool = False
     ) -> Dict[str, Any]:
         """Request to rephase text
 
         Args:
             question (str): Your context
-            model (str, optional): model name. Defaults to "Qwen3-14B-pre-train-awq-4bit".
-            web_search (bool, optional): If need web search. Defaults to False.
+            model (str, optional): model name. Defaults to "Qwen3-14B-pre-train".
             temperature (float, optional): controls how creative or deterministic the model’s output is. Defaults to 0.7.
-            max_tokens (int | None, optional): max token size. Defaults to None.
+            max_tokens (int, optional): max token size. Defaults to 1024.
             stream (bool, optional): if stream chat. Defaults to False.
 
         Returns:
@@ -61,7 +59,7 @@ class SISIClient(BaseAIClient):
                     "content": question + "请不要过多扩展。"
                 }
             ],
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": stream
         }
