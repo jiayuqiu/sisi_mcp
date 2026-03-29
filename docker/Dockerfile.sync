@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends cron && rm -rf /var/lib/apt/lists/*
+
+RUN pip install uv
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY . .
+
+RUN mkdir -p ./tmp/images
+
+# Register crontab
+COPY docker/crontab.sync /etc/cron.d/bci_sync
+RUN chmod 0644 /etc/cron.d/bci_sync && crontab /etc/cron.d/bci_sync
+
+# Run initial sync on startup, then hand off to cron
+CMD cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py ; cron -f

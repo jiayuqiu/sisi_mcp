@@ -100,6 +100,15 @@ CREATE TABLE IF NOT EXISTS log_agent_work_history (
     content TEXT,
     reasoning_content TEXT
 );
+
+-- Daily ship counts per shipping channel
+CREATE TABLE IF NOT EXISTS ship_cnt_in_pipe (
+    pipe_name TEXT,             -- Name of the channel (e.g., '马六甲海峡')
+    date_id INTEGER,            -- Date in YYYYMMDD format
+    ship_cnt INTEGER,           -- Number of ships
+    detection_flag TEXT,        -- Anomaly marker (e.g., '红') or NULL
+    PRIMARY KEY (pipe_name, date_id)
+);
 ```
 
 ## Cross-Container Networking

@@ -1,8 +1,6 @@
 import pandas as pd
 import logging
 from datetime import datetime, timedelta
-import glob
-import os
 from pathlib import Path
 from sqlalchemy import create_engine
 

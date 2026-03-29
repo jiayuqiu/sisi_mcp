@@ -50,21 +50,21 @@ services:
       - default
       - dify_platform
 
-  # frontend:
-  #   build:
-  #     context: ..
-  #     dockerfile: docker/Dockerfile
-  #   container_name: sisimcp-frontend
-  #   ports:
-  #     - "8003:8003"
-  #   environment:
-  #     - DIFY_API_KEY=${DIFY_API_KEY}
-  #     - DIFY_CHATFLOW_URL=${DIFY_CHATFLOW_URL}
-  #   volumes:
-  #     - ../data:/app/data
-  #     - ../tmp:/app/tmp
-  #   command: uv run python frontend/app.py
-  #   restart: unless-stopped
+  bci_sync:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sync
+    container_name: sisimcp-bci-sync
+    environment:
+      - BCI_APP_ID=${BCI_APP_ID}
+      - BCI_SECRET_KEY=${BCI_SECRET_KEY}
+      - BCI_BASE_URL=${BCI_BASE_URL}
+      - BCI_SYNC_START_DATE=${BCI_SYNC_START_DATE:-2026-01-01}
+    volumes:
+      - ../data:/app/data
+    restart: unless-stopped
+    networks:
+      - default
 
   frontend_nextjs:
     build:
