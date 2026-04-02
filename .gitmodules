@@ -1,0 +1,4 @@
+[submodule "dify"]
+	path = dify
+	url = https://github.com/langgenius/dify.git
+	branch = release/e-1.11.4
