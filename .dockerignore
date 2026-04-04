@@ -17,3 +17,6 @@ venv
 .env
 .env.*
 tmp/
+
+# Dify subproject (has permission-restricted volumes)
+dify/
