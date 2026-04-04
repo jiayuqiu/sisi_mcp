@@ -142,7 +142,6 @@ cython_debug/
 .vscode/
 secrets/
 data/
-!data/sisi.sqlite
 tmp/
 private/
 .claude/

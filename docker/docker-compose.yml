@@ -8,15 +8,11 @@ services:
     container_name: sisimcp-mcp-server
     ports:
       - "8000:8000"
+    env_file: ../.env
     environment:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
       - MCP_TRANSPORT=streamable-http
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - SISI_API_KEY=${SISI_API_KEY}
-      - BCI_APP_ID=${BCI_APP_ID}
-      - BCI_SECRET_KEY=${BCI_SECRET_KEY}
-      - BCI_BASE_URL=${BCI_BASE_URL}
     volumes:
       - ../data:/app/data
       - ../tmp:/app/tmp
@@ -33,12 +29,7 @@ services:
     container_name: sisimcp-dify-api
     ports:
       - "8002:8002"
-    environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - SISI_API_KEY=${SISI_API_KEY}
-      - BCI_APP_ID=${BCI_APP_ID}
-      - BCI_SECRET_KEY=${BCI_SECRET_KEY}
-      - BCI_BASE_URL=${BCI_BASE_URL}
+    env_file: ../.env
     volumes:
       - ../data:/app/data
       - ../tmp:/app/tmp
@@ -55,10 +46,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.sync
     container_name: sisimcp-bci-sync
+    env_file: ../.env
     environment:
-      - BCI_APP_ID=${BCI_APP_ID}
-      - BCI_SECRET_KEY=${BCI_SECRET_KEY}
-      - BCI_BASE_URL=${BCI_BASE_URL}
       - BCI_SYNC_START_DATE=${BCI_SYNC_START_DATE:-2026-01-01}
     volumes:
       - ../data:/app/data
@@ -73,10 +62,9 @@ services:
     container_name: sisimcp-frontend-nextjs
     ports:
       - "3000:3000"
+    env_file: ../.env
     environment:
       - NODE_ENV=production
-      - DIFY_API_KEY=${DIFY_API_KEY}
-      - DIFY_CHATFLOW_URL=${DIFY_CHATFLOW_URL}
       - SQLITE_DB_PATH=/app/data/sisi.sqlite
     volumes:
       - ../data:/app/data
