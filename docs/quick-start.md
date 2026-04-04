@@ -9,7 +9,7 @@ Everything you need to get SISI up and running, in order.
 | 1 | Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) | ☐ |
 | 2 | Clone & start **Dify** platform (Section 1) | ☐ |
 | 3 | Generate a **Dify API key** (Section 2.1) | ☐ |
-| 4 | Fill in `sisimcp/docker/.env` with your API keys (Section 2.2) | ☐ |
+| 4 | Fill in `sisimcp/.env` with your API keys (Section 2.2) | ☐ |
 | 5 | Run `docker compose up -d` inside `sisimcp/docker/` (Section 2.3) | ☐ |
 | 6 | Import chatflow & workflow YAML files into Dify (Section 2.4) | ☐ |
 | 7 | Open **http://localhost:3000** in your browser (Section 3) | ☐ |
@@ -71,9 +71,11 @@ Navigate to your Dify workspace → **API Keys** and generate a new key.
 
 ### 2.2 Configure environment variables
 
+Create `sisimcp/.env` at the project root:
+
 ```bash
-cd sisimcp/docker
-cp .env.example .env
+cd sisimcp
+cp docker/.env.example .env
 # Edit .env and fill in the required tokens
 ```
 
@@ -83,11 +85,12 @@ Required variables:
 |---|---|
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `SISI_API_KEY` | SISI AI API key |
+| `SISI_API_APP_ID` | SISI app ID |
 | `BCI_APP_ID` | BCI app ID |
 | `BCI_SECRET_KEY` | BCI secret key |
 | `BCI_BASE_URL` | BCI base URL |
 | `DIFY_API_KEY` | Dify API key (generated in step 2.1) |
-| `DIFY_CHATFLOW_URL` | Dify chatflow endpoint URL |
+| `DIFY_CHATFLOW_URL` | Dify instance URL, e.g. `http://your-dify-host/v1` |
 
 ### 2.3 Start all services (MCP + Dify API + Frontend)
 
@@ -172,14 +175,17 @@ If you want to run the Next.js frontend outside of Docker for development:
 
 ```bash
 cd sisimcp/frontend_nextjs
-cp .env.local.example .env.local
-# Edit .env.local and fill in DIFY_API_KEY, DIFY_CHATFLOW_URL, SQLITE_DB_PATH
-
 npm install
 npm run dev
 ```
 
-> **Note:** `SQLITE_DB_PATH` should point to the local SQLite file, e.g. `../data/sisi.sqlite`.
+The frontend reads `DIFY_API_KEY`, `DIFY_CHATFLOW_URL`, and `SQLITE_DB_PATH` from the environment. For local dev, set them in a `frontend_nextjs/.env.local` file:
+
+```
+DIFY_API_KEY=your_dify_api_key
+DIFY_CHATFLOW_URL=http://your-dify-host/v1
+SQLITE_DB_PATH=../data/sisi.sqlite
+```
 
 ---
 
