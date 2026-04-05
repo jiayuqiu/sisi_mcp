@@ -20,10 +20,11 @@ from pydantic import BaseModel
 
 # Import the actual tool functions
 from mcp_conductor.entry.main_traffic_detect import pipe_traffic_detect
-from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
 from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 import re
 import calendar
+import sqlite3
+from pathlib import Path
 logger = logging.getLogger("dify_api")
 
 app = FastAPI(title="Dify Traffic Detection API")
@@ -97,8 +98,6 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
 async def question_list():
     """Return distinct pipe names as pre-built question suggestions."""
     try:
-        import sqlite3
-        from pathlib import Path
         db_path = Path("./data/sisi.sqlite")
         with sqlite3.connect(str(db_path)) as conn:
             rows = conn.execute("SELECT DISTINCT pipe_name FROM ship_cnt_in_pipe").fetchall()
@@ -124,20 +123,29 @@ async def detect_anomaly(request: QuestionRequest):
                 "message": "无法解析问题。请确保包含年月和通道名称。示例：2023年12月 曼德海峡是否发生异常？"
             }
 
-        # Run detection in executor to avoid blocking
-        loop = asyncio.get_event_loop()
-        # TODO: update this api
-        changepoints_result = await loop.run_in_executor(
-            None,
-            pipe_rp_detect_engine,
-            run_date,
-            pipe_name
-        )
+        # Query pre-computed detection results from the view
+        date_id = int(run_date.replace("-", ""))
+        db_path = Path("./data/sisi.sqlite")
+        with sqlite3.connect(str(db_path)) as conn:
+            row = conn.execute(
+                "SELECT anomaly_flag, flag_name, description, quantile_10, quantile_90, anomaly_ratio "
+                "FROM vw_m_pipe_anomaly_roll_percentile WHERE pipe_name = ? AND date_id = ?",
+                (pipe_name, date_id),
+            ).fetchone()
 
-        if len(changepoints_result) > 0:
-            result_text = f"🚢 检测结果：{run_date} {pipe_name} 发生异常，异常天数 {changepoints_result[pipe_name].shape[0]}"
+        if row is None:
+            return {
+                "success": False,
+                "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
+            }
+
+        anomaly_flag, flag_name, description, quantile_10, quantile_90, anomaly_ratio = row
+        is_anomaly = anomaly_flag == 1
+
+        if is_anomaly:
+            result_text = f"🚢 检测结果：{run_date} {pipe_name} 发生异常（{description}），近30日异常比率 {anomaly_ratio:.2%}"
         else:
-            result_text = f"✅ 检测结果：{run_date} {pipe_name} 无异常发生"
+            result_text = f"✅ 检测结果：{run_date} {pipe_name} 无异常发生（{description}），近30日异常比率 {anomaly_ratio:.2%}"
 
         logger.info(f"Detection result: {result_text}")
         return {
@@ -145,7 +153,12 @@ async def detect_anomaly(request: QuestionRequest):
             "result": result_text,
             "run_date": run_date,
             "pipe_name": pipe_name,
-            "if_anomaly": changepoints_result[pipe_name].shape[0] > 0
+            "if_anomaly": is_anomaly,
+            "anomaly_flag": anomaly_flag,
+            "flag_name": flag_name,
+            "quantile_10": quantile_10,
+            "quantile_90": quantile_90,
+            "anomaly_ratio": anomaly_ratio,
         }
 
     except Exception as e:

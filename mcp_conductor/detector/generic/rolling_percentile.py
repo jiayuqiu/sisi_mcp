@@ -37,7 +37,7 @@ class RollingPercentileDetector(BaseDetector):
         value: DataFrame,
         pipe_name: str,
         run_date_id: int,
-        interval_days: int = 7
+        interval_days: int = 30
     ) -> dict:
         """
         Args:
@@ -45,7 +45,7 @@ class RollingPercentileDetector(BaseDetector):
                            must contain columns [date_id, ship_cnt].
             pipe_name    : strait name (reserved for future use / logging).
             run_date_id  : reference date in YYYYMMDD (reserved for future use).
-            interval_days: number of most-recent days to evaluate. Default 7.
+            interval_days: number of most-recent days to evaluate. Default 30.
 
         Returns:
             dict with keys:
