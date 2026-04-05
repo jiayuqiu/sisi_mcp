@@ -117,6 +117,7 @@ async def detect_anomaly(request: QuestionRequest):
 
         # Parse the question
         run_date, pipe_name = parse_question(request.question)
+        logger.info(f"Detect anomaly parse_question: {run_date}, {pipe_name}")
         if not run_date or not pipe_name:
             return {
                 "success": False,
@@ -134,6 +135,7 @@ async def detect_anomaly(request: QuestionRequest):
             ).fetchone()
 
         if row is None:
+            logger.info(f"Can't get records from db: {run_date}, {pipe_name}")
             return {
                 "success": False,
                 "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
