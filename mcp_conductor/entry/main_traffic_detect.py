@@ -1,30 +1,30 @@
 """
-This script is to 1. combine the changepoints detector with deepseek and sisi-ai.
-Once we find the changepoints from pipe data, ask deepseek with web search to get weather and news around the pipe.
-Finally, feed the text of weather and news into sisi-ai to rephase, summay and tranlate the text into chinese.
+Detect anomalous strait traffic using the rolling percentile method.
+When an anomaly is found, query DeepSeek (web search) for weather and news
+context around that date, then return the summary.
 """
-from pprint import pprint
 import argparse
 import json
 import logging
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
+from mcp_conductor.resources.utils.db import get_engine
+from mcp_conductor.resources.utils.logger import get_logger
+from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
-# from mcp_conductor.resources.sisi.APIs.LLM import SISIClient
-from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
-from mcp_conductor.resources.tools import remove_think_tag
 from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DB_PATH = Path("./data/sisi.sqlite")
 
 
 def save_to_log(response: dict, payload: str, question_type: str = "weather_news") -> None:
-    """Save a DeepSeek API response to log_agent_work_history."""
+    """Persist a DeepSeek API response to log_agent_work_history."""
     try:
         return_id = response.get("id", "")
         content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -40,76 +40,95 @@ def save_to_log(response: dict, payload: str, question_type: str = "weather_news
         )
         conn.commit()
         conn.close()
-        logger.info(f"Saved log for return_id={return_id}")
+        logger.info("Saved log for return_id=%s", return_id)
     except Exception as e:
-        logger.error(f"Failed to save log: {e}")
+        logger.error("Failed to save log: %s", e)
 
 
-def analyze_congestion(pipe_name: str, changepoints: pd.DataFrame) -> str:
-    if changepoints.shape[0] == 0:
-        pprint(f"🟢 {pipe_name} 通航正常")
-    # get the last changepoint
-    changepoints_result = changepoints.iloc[[-1], :]
+def load_pipe_data(pipe_name: str) -> pd.DataFrame:
+    """Load full historical ship count data for a strait from SQLite."""
+    df = pd.read_sql(
+        "SELECT date_id, ship_cnt FROM ship_cnt_in_pipe WHERE pipe_name = :name",
+        con=get_engine(),
+        params={"name": pipe_name},
+    )
+    return df
 
-    # deepseek client
+
+def analyze_congestion(pipe_name: str, run_date: str) -> str:
+    """Query DeepSeek for weather/news context on the anomaly date."""
+    run_date_id = int(run_date.replace("-", ""))
     ds_client = DeepSeekClient()
-    # sisi_client = SISIClient()
 
-    # for each changepoints, request deepseek web search to find out the reason.
-    detection_records = []
-    for _, row in changepoints_result.iterrows():
-        # weather, news
-        changepoint_date_id = row['date_id']
-        pipe_name = row['pipe_name']
-        weather_news_question = WEB_SEARCH_WEATHER_NEWS.format(
-            date_id = changepoint_date_id,
-            pipe_name = pipe_name
-        )
+    question = WEB_SEARCH_WEATHER_NEWS.format(date_id=run_date_id, pipe_name=pipe_name)
+    response = ds_client.search_and_ask(question=question)
+    logger.info("DeepSeek response: %s", response)
 
-        weather_news_response = ds_client.search_and_ask(
-            question=weather_news_question
-        )
-        logger.info(f"weather_news_response: {weather_news_response}")
-        save_to_log(weather_news_response, payload=weather_news_question, question_type="weather_news")
-        weather_news_text = weather_news_response["choices"][0]["message"]["content"]
-
-        # # rephase and summay by sisi-ai  
-        # TODO: comment out this block as SISI API Issue, will enable once SISI API reover.
-        summary_text = weather_news_text
-        # summary_resp = sisi_client.search_and_ask(question=weather_news_text)
-        # logger.info(f"summary_resp: {summary_resp}")
-        # summary_text = remove_think_tag(summary_resp["choices"][0]["message"]["content"])
-        # remove think tag
-        detection_records.append(
-            {
-                "date_id": changepoint_date_id,
-                "pipe_name": pipe_name,
-                "detection": summary_text
-            }
-        )
-
-    return detection_records[-1]["detection"]
+    save_to_log(response, payload=question, question_type="weather_news")
+    return response["choices"][0]["message"]["content"]
 
 
-def trigger_traffic_detect(run_date: str, pipe_name: str) -> str:
-    changepoints_result: dict[str, pd.DataFrame] = pipe_detect_engine(run_date, pipe_name)
-    changepoints = changepoints_result[pipe_name]
-    detection_text: str = analyze_congestion(pipe_name=pipe_name, changepoints=changepoints)
-    return detection_text
+def save_anomaly_results(pipe_anomaly_list: list[dict]) -> None:
+    """
+    Persist detection results into m_pipe_anomaly_roll_percentile.
+
+    Uses INSERT OR REPLACE so re-running detection on the same date
+    overwrites the previous result.
+
+    Args:
+        pipe_anomaly_list: output of pipe_detect_engine — list of dicts with
+                           keys pipe_name, run_date_id, anomaly_flag.
+    """
+    updated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        for row in pipe_anomaly_list:
+            try:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO m_pipe_anomaly_roll_percentile
+                        (pipe_name, date_id, anomaly_flag, quantile_10, quantile_90, anomaly_ratio, updated_timestamp_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row["pipe_name"],
+                        row["run_date_id"],
+                        int(row["anomaly_flag"]),
+                        row["quantile_10"],
+                        row["quantile_90"],
+                        row["anomaly_ratio"],
+                        updated_at,
+                    ),
+                )
+            except Exception:
+                logger.error("[%s] FAILED to save row: %s", row.get("run_date_id"), row, exc_info=True)
+                raise
+        conn.commit()
+    logger.info("Saved %d anomaly results to m_pipe_anomaly_roll_percentile.", len(pipe_anomaly_list))
 
 
-def run_app():
-    parser = argparse.ArgumentParser(description='process match polygon for events')
-    parser.add_argument(f"--run_date", type=str, required=True, help='Process model run date')
-    parser.add_argument(f"--pipe", type=str, required=True, help='Process model on specific pipe')
-    args = parser.parse_args()
+def pipe_traffic_detect(run_date: str) -> None:
+    """
+    Run rolling percentile detection across all straits for a given date
+    and persist the results to m_pipe_anomaly_roll_percentile.
 
-    run_date = args.__getattribute__("run_date")
-    pipe_name = args.__getattribute__("pipe")
-    changepoints_result: dict[str, pd.DataFrame] = pipe_detect_engine(run_date, pipe_name)
-    changepoints = changepoints_result[pipe_name]
-    analyze_congestion(pipe_name=pipe_name, changepoints=changepoints)
+    Args:
+        run_date     : detection date in YYYY-MM-DD format.
+    """
+    # detect anomalies across all straits
+    pipe_anomaly_list = pipe_rp_detect_engine(run_date=run_date)
+
+    # persist results
+    save_anomaly_results(pipe_anomaly_list)
 
 
 if __name__ == "__main__":
-    run_app()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    parser = argparse.ArgumentParser(description="Run rolling percentile traffic detection")
+    parser.add_argument("--run_date", type=str, required=True, help="Detection date (YYYY-MM-DD)")
+    args = parser.parse_args()
+    run_date = args.run_date
+
+    # trigger detect
+    pipe_traffic_detect(run_date)

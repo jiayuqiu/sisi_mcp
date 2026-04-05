@@ -28,6 +28,7 @@ class ChangePointDetector(BaseDetector):
         self.n_bkps = self.config.get('n_bkps', 3)
         self.jump = self.config.get('jump', 5)
         self.width = self.config.get('width', 5)
+        self.engine = self.config.get('engine', None)
         self.algo = None
 
     def detect(self, value: Union[List[float], np.ndarray], pipe_name: str | None = None) -> Dict[str, Any]:

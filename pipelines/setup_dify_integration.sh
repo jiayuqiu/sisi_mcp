@@ -35,7 +35,7 @@ echo ""
 
 # Start MCP server in background
 echo "🔧 Starting MCP HTTP Server on port 8000..."
-python3 mcp_server_http.py > ./tmp/mcp_server.log 2>&1 &
+python3 mcp_conductor/servers/mcp_server_http.py > ./tmp/mcp_server.log 2>&1 &
 MCP_PID=$!
 echo "   PID: $MCP_PID"
 

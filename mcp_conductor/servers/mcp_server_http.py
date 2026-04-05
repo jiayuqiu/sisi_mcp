@@ -13,8 +13,8 @@ import argparse
 from fastmcp import FastMCP
 from pathlib import Path
 
-from mcp_conductor.entry.main_traffic_detect import trigger_traffic_detect
-from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
+from mcp_conductor.entry.main_traffic_detect import pipe_traffic_detect
+from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
 from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 
 # Configure logging to output to both file and stderr
@@ -121,7 +121,7 @@ async def detect_traffic_congestion(question: str) -> str:
     loop = asyncio.get_event_loop()
     changepoints_result = await loop.run_in_executor(
         None,
-        pipe_detect_engine,
+        pipe_rp_detect_engine,
         run_date,
         pipe_name
     )
@@ -171,7 +171,7 @@ async def ask_traffic_question(question: str) -> str:
         # Step 2: Run congestion detection
         detect_result = await loop.run_in_executor(
             None,
-            trigger_traffic_detect,
+            pipe_traffic_detect,
             run_date,
             pipe_name
         )

@@ -64,7 +64,7 @@ if [ -f "$MCP_PID_FILE" ]; then
 fi
 
 if [ ! -f "$MCP_PID_FILE" ]; then
-    $PYTHON_CMD mcp_server_http.py \
+    $PYTHON_CMD mcp_conductor/servers/mcp_server_http.py \
         --host "$MCP_HOST" \
         --port "$MCP_PORT" \
         --transport "$TRANSPORT" \
@@ -97,7 +97,7 @@ if [ -f "$DIFY_PID_FILE" ]; then
 fi
 
 if [ ! -f "$DIFY_PID_FILE" ]; then
-    $PYTHON_CMD dify_api_server.py >> "$DIFY_LOG_FILE" 2>&1 &
+    $PYTHON_CMD mcp_conductor/servers/dify_api_server.py >> "$DIFY_LOG_FILE" 2>&1 &
 
     DIFY_PID=$!
     echo $DIFY_PID > "$DIFY_PID_FILE"

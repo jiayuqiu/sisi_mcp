@@ -15,7 +15,7 @@ services:
     volumes:
       - ../data:/app/data
       - ../tmp:/app/tmp
-    command: uv run python mcp_server_http.py
+    command: uv run python mcp_conductor/servers/mcp_server_http.py
     restart: unless-stopped
     networks:
       - default
@@ -32,7 +32,7 @@ services:
     volumes:
       - ../data:/app/data
       - ../tmp:/app/tmp
-    command: uv run python dify_api_server.py
+    command: uv run python mcp_conductor/servers/dify_api_server.py
     restart: unless-stopped
     depends_on:
       - mcp_server
@@ -48,8 +48,10 @@ services:
     env_file: ../.env
     environment:
       - BCI_SYNC_START_DATE=${BCI_SYNC_START_DATE:-2026-01-01}
+      - TZ=Australia/Sydney
     volumes:
       - ../data:/app/data
+      - ../tmp:/var/log
     restart: unless-stopped
     networks:
       - default

@@ -19,8 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import the actual tool functions
-from mcp_conductor.entry.main_traffic_detect import trigger_traffic_detect
-from mcp_conductor.detector.pipe_detect_engine import pipe_detect_engine
+from mcp_conductor.entry.main_traffic_detect import pipe_traffic_detect
+from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
 from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 import re
 import calendar
@@ -93,6 +93,23 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
     return run_date, pipe
 
 
+@app.get("/api/question_list")
+async def question_list():
+    """Return distinct pipe names as pre-built question suggestions."""
+    try:
+        import sqlite3
+        from pathlib import Path
+        db_path = Path("./data/sisi.sqlite")
+        with sqlite3.connect(str(db_path)) as conn:
+            rows = conn.execute("SELECT DISTINCT pipe_name FROM ship_cnt_in_pipe").fetchall()
+        pipe_names = [r[0] for r in rows]
+        question_list = [f"2024年1月 {name}是否拥堵" for name in pipe_names]
+        return {"question_list": question_list}
+    except Exception as e:
+        logger.error("Error in question_list: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/detect_anomaly")
 async def detect_anomaly(request: QuestionRequest):
     """Detect traffic congestion for specified date and channel"""
@@ -109,9 +126,10 @@ async def detect_anomaly(request: QuestionRequest):
 
         # Run detection in executor to avoid blocking
         loop = asyncio.get_event_loop()
+        # TODO: update this api
         changepoints_result = await loop.run_in_executor(
             None,
-            pipe_detect_engine,
+            pipe_rp_detect_engine,
             run_date,
             pipe_name
         )
@@ -154,7 +172,7 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         loop = asyncio.get_event_loop()
         analysis_result = await loop.run_in_executor(
             None,
-            trigger_traffic_detect,
+            pipe_traffic_detect,
             run_date,
             pipe_name
         )

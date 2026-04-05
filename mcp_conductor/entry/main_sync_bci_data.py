@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from mcp_conductor.resources.sisi.APIs.metrics_api import MetricsAPI
+from mcp_conductor.entry.main_setup_schema import setup_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -18,8 +19,11 @@ DB_PATH = Path("./data/sisi.sqlite")
 STATUS_PATH = Path("./data/sync_status.json")
 
 
+LOG_PATH = Path("./tmp/sync_history.jsonl")
+
+
 def write_status(status: str, **kwargs):
-    """Write sync status to data/sync_status.json."""
+    """Write sync status to data/sync_status.json and append to tmp/sync_history.jsonl."""
     import json
     payload = {
         "status": status,
@@ -28,6 +32,9 @@ def write_status(status: str, **kwargs):
     }
     STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 def get_last_synced_date() -> str | None:
@@ -88,7 +95,7 @@ def sync_bci_data(start_date: str, end_date: str):
 
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO ship_cnt_in_pipe (pipe_name, date_id, ship_cnt, detection_flag)
+                INSERT OR REPLACE INTO ship_cnt_in_pipe (pipe_name, date_id, ship_cnt, detection_flag)
                 VALUES (?, ?, ?, NULL)
                 """,
                 (pipe_name, date_id, int(value))
@@ -106,6 +113,8 @@ def sync_bci_data(start_date: str, end_date: str):
         conn.close()
 
 if __name__ == "__main__":
+    setup_schema()
+
     parser = argparse.ArgumentParser(description="Sync BCI indicator data to local SQLite")
     parser.add_argument("--start_date", type=str, help="Override start date (YYYY-MM-DD)")
     parser.add_argument("--end_date", type=str, help="Override end date (YYYY-MM-DD), defaults to today")

@@ -19,9 +19,10 @@
 ## Project Structure
 
 ```
-mcp_server_http.py          # MCP HTTP server entrypoint
-dify_api_server.py          # FastAPI server for Dify integration
 mcp_conductor/              # Backend features (core business logic)
+  servers/                  # Long-running server entrypoints
+    mcp_server_http.py      # MCP HTTP server entrypoint
+    dify_api_server.py      # FastAPI server for Dify integration
   entry/                    # High-level orchestration (main_traffic_detect)
   detector/                 # Detection engine & plotting
   mcp_tools/                # MCP tool definitions

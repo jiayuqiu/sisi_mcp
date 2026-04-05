@@ -18,4 +18,4 @@ COPY docker/crontab.sync /etc/cron.d/bci_sync
 RUN chmod 0644 /etc/cron.d/bci_sync && crontab /etc/cron.d/bci_sync
 
 # Run initial sync on startup, then hand off to cron
-CMD cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py ; cron -f
+CMD printenv | grep -v "^HOSTNAME\|^HOME\|^PWD\|^SHLVL\|^PATH\|^_=" >> /etc/environment && cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py ; cron -f
