@@ -4,7 +4,6 @@ When an anomaly is found, query DeepSeek (web search) for weather and news
 context around that date, then return the summary.
 """
 import argparse
-import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -17,38 +16,12 @@ from mcp_conductor.resources.utils.logger import get_logger
 from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
 from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
+from mcp_conductor.resources.utils.db import save_to_log
+
 
 logger = get_logger(__name__)
 
 DB_PATH = Path("./data/sisi.sqlite")
-
-
-def save_to_log(
-    response: dict,
-    payload: str,
-    date_id: int,
-    pipe_name: str,
-    question_type: str = "weather_news",
-) -> None:
-    """Persist a DeepSeek API response to log_agent_worklog."""
-    try:
-        return_id = response.get("id", "")
-        content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-        reasoning_content = response.get("choices", [{}])[0].get("message", {}).get("reasoning_content", "")
-        full_response = json.dumps(response, ensure_ascii=False)
-
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.execute(
-            """INSERT OR REPLACE INTO log_agent_worklog
-               (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content),
-        )
-        conn.commit()
-        conn.close()
-        logger.info("Saved log for return_id=%s, pipe_name=%s, date_id=%s", return_id, pipe_name, date_id)
-    except Exception as e:
-        logger.error("Failed to save log: %s", e)
 
 
 def load_pipe_data(pipe_name: str) -> pd.DataFrame:

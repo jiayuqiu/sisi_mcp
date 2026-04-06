@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     // Check if table exists
     const tableExists = db
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='log_agent_work_history'"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='log_agent_worklog'"
       )
       .get();
 
@@ -25,12 +25,12 @@ export async function GET(req: NextRequest) {
     }
 
     const totalRow = db
-      .prepare("SELECT COUNT(*) AS cnt FROM log_agent_work_history")
+      .prepare("SELECT COUNT(*) AS cnt FROM log_agent_worklog")
       .get() as { cnt: number };
 
     const logs = db
       .prepare(
-        "SELECT id, question_type, run_date, content, reasoning_content FROM log_agent_work_history ORDER BY run_timestamp DESC LIMIT ? OFFSET ?"
+        "SELECT return_id, question_type, date_id, pipe_name, content, reasoning_content FROM log_agent_worklog ORDER BY run_timestamp DESC LIMIT ? OFFSET ?"
       )
       .all(limit, offset);
 

@@ -13,17 +13,26 @@ import {
   Calendar,
   Tag,
   Activity,
+  Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LogEntry {
-  id: number;
+  return_id: string;
   question_type: string | null;
-  run_date: string | null;
+  date_id: number | null;
+  pipe_name: string | null;
   content: string | null;
   reasoning_content: string | null;
+}
+
+function formatDateId(dateId: number | null): string {
+  if (dateId == null) return "—";
+  const s = String(dateId);
+  if (s.length !== 8) return s;
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 }
 
 interface LogsResponse {
@@ -86,12 +95,25 @@ function LogCard({ log }: { log: LogEntry }) {
       {/* Card header */}
       <div className="flex items-center justify-between px-5 py-3.5">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-slate-600">#{log.id}</span>
+          <span
+            className="text-xs font-mono text-slate-600 truncate max-w-[160px]"
+            title={log.return_id}
+          >
+            #{log.return_id}
+          </span>
           <Badge type={log.question_type} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Calendar className="w-3.5 h-3.5" />
-          <span className="font-mono">{log.run_date ?? "—"}</span>
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          {log.pipe_name && (
+            <span className="flex items-center gap-1.5">
+              <Waves className="w-3.5 h-3.5" />
+              <span>{log.pipe_name}</span>
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            <span className="font-mono">{formatDateId(log.date_id)}</span>
+          </span>
         </div>
       </div>
 
@@ -244,7 +266,7 @@ export default function WorkflowPage() {
           </div>
         )}
 
-        {!loading && logs.map((log) => <LogCard key={log.id} log={log} />)}
+        {!loading && logs.map((log) => <LogCard key={log.return_id} log={log} />)}
       </div>
 
       {/* Pagination */}

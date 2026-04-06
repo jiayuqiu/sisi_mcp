@@ -7,6 +7,10 @@ import os
 import json
 import logging
 import asyncio
+import re
+import calendar
+import sqlite3
+from pathlib import Path
 
 # Configure logging early, before other imports create their loggers
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -22,10 +26,8 @@ from pydantic import BaseModel
 # Import the actual tool functions
 from mcp_conductor.entry.main_traffic_detect import analyze_congestion
 from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
-import re
-import calendar
-import sqlite3
-from pathlib import Path
+from mcp_conductor.resources.utils.db import save_worklog_entry
+
 logger = logging.getLogger("dify_api")
 
 DB_PATH = Path("./data/sisi.sqlite")
@@ -49,6 +51,13 @@ class QuestionRequest(BaseModel):
 class PlotRequest(BaseModel):
     run_date: str
     pipe_name: str
+
+class SaverRequest(BaseModel):
+    question: str
+    question_type: str
+    content: str
+    reasoning_content: str | None = None
+    return_id: str | None = None
 
 
 def parse_question(question: str) -> tuple[str | None, str | None]:
@@ -278,6 +287,51 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/save_worklog")
+async def save_worklog(request: SaverRequest):
+    """Persist a summary (NORMALSUMMARY / DATAISSUESUMMARY) from a Dify LLM node.
+
+    The Dify `question` input is the same JSON string used by other endpoints
+    ({"year","month","day","location","question"}), so we can reuse
+    parse_question_json to recover run_date and pipe_name.
+    """
+    try:
+        logger.info(
+            "save_worklog request: question_type=%s, question=%s",
+            request.question_type, request.question,
+        )
+
+        run_date, pipe_name = parse_question_json(request.question)
+        if not run_date or not pipe_name:
+            return {
+                "success": False,
+                "message": "无法解析 question。需要包含 year/month/day/location 字段的 JSON。",
+            }
+
+        date_id = int(run_date.replace("-", ""))
+        return_id = save_worklog_entry(
+            content=request.content,
+            pipe_name=pipe_name,
+            date_id=date_id,
+            question_type=request.question_type,
+            payload=request.question,
+            reasoning_content=request.reasoning_content or "",
+            return_id=request.return_id,
+        )
+
+        return {
+            "success": True,
+            "return_id": return_id,
+            "run_date": run_date,
+            "pipe_name": pipe_name,
+            "question_type": request.question_type,
+        }
+
+    except Exception as e:
+        logger.error("Error in save_worklog: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/plot_analysis")
 async def plot_analysis(request: PlotRequest):
     """Generate ship congestion plot"""
@@ -338,6 +392,7 @@ async def root():
             "detect_anomaly": "/api/detect_anomaly",
             "analyze_anomaly_reason": "/api/analyze_anomaly_reason",
             "plot_analysis": "/api/plot_analysis",
+            "save_worklog": "/api/save_worklog",
             "health": "/health"
         },
         "status": "running"

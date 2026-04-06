@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS log_agent_worklog (
     run_timestamp TEXT DEFAULT (datetime('now')),
     content TEXT,
     reasoning_content TEXT,
-    PRIMARY KEY (pipe_name, date_id)
+    PRIMARY KEY (pipe_name, date_id, run_timestamp)
 );
 """
 
