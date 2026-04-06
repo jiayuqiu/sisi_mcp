@@ -1,1 +1,4 @@
-20 9 * * * cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py >> /var/log/bci_sync.log 2>&1
+0 2 * * * cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py >> /var/log/bci_sync.log 2>&1
+
+# for in case, run yesterday, should run today, will update later.
+0 3 * * * cd /app && uv run python -m mcp_conductor.entry.main_trigger_dify_chatflow --start-date $(date -d yesterday +\%Y-\%m-\%d) --end-date $(date -d yesterday +\%Y-\%m-\%d) --sleep 2 >> /var/log/trigger_chatflow.log 2>&1

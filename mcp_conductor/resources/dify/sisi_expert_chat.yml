@@ -296,7 +296,6 @@ workflow:
           variable_selector: []
         model:
           completion_params:
-            response_format: json_object
             temperature: 0.1
           mode: chat
           name: deepseek-chat

@@ -2,6 +2,8 @@
 Detect anomalous strait traffic using the rolling percentile method.
 When an anomaly is found, query DeepSeek (web search) for weather and news
 context around that date, then return the summary.
+
+TODO: not a entry script, will move to a better place later.
 """
 import argparse
 import logging
