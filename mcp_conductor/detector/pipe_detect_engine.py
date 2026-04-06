@@ -94,6 +94,8 @@ def single_pipe_detect(signals: pd.DataFrame,
                 "run_date_id"   : int,    # YYYYMMDD
                 "anomaly_flag"  : int,    # FLAG value (0–4)
                 "quantile_10"   : float,  # 10th-percentile ship count
+                "quantile_25"   : float,  # 25th-percentile ship count
+                "quantile_75"   : float,  # 75th-percentile ship count
                 "quantile_90"   : float,  # 90th-percentile ship count
                 "anomaly_ratio" : float,  # outlier days / interval_days
             }
@@ -103,6 +105,8 @@ def single_pipe_detect(signals: pd.DataFrame,
         anomaly_detection = {
             "anomaly_flag": FLAG.NO_DATA,
             "quantile_10": None,
+            "quantile_25": None,
+            "quantile_75": None,
             "quantile_90": None,
             "anomaly_ratio": None,
         }
@@ -114,6 +118,8 @@ def single_pipe_detect(signals: pd.DataFrame,
         "run_date_id": run_date_id,
         "anomaly_flag": anomaly_detection["anomaly_flag"],
         "quantile_10": anomaly_detection.get("quantile_10"),
+        "quantile_25": anomaly_detection.get("quantile_25"),
+        "quantile_75": anomaly_detection.get("quantile_75"),
         "quantile_90": anomaly_detection.get("quantile_90"),
         "anomaly_ratio": anomaly_detection.get("anomaly_ratio"),
     }
@@ -140,6 +146,8 @@ def pipe_rp_detect_engine(run_date: str, pipe_name: str | None = None) -> list[d
                 "run_date_id"   : int,    # YYYYMMDD
                 "anomaly_flag"  : int,    # FLAG value (0–4)
                 "quantile_10"   : float,  # 10th-percentile ship count
+                "quantile_25"   : float,  # 25th-percentile ship count
+                "quantile_75"   : float,  # 75th-percentile ship count
                 "quantile_90"   : float,  # 90th-percentile ship count
                 "anomaly_ratio" : float,  # outlier days / interval_days
             }

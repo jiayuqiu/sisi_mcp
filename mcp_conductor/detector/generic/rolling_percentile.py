@@ -64,18 +64,25 @@ class RollingPercentileDetector(BaseDetector):
 
         # derive p10 / p90 bounds from the entire historical record
         quantile_10 = np.percentile(value["ship_cnt"], 10)
+        quantile_25 = np.percentile(value["ship_cnt"], 25)
+        quantile_75 = np.percentile(value["ship_cnt"], 75)
         quantile_90 = np.percentile(value["ship_cnt"], 90)
+        return_dict["quantile_10"] = quantile_10
+        return_dict["quantile_25"] = quantile_25
+        return_dict["quantile_75"] = quantile_75
+        return_dict["quantile_90"] = quantile_90
         if (quantile_10 == 0) and (quantile_90 == 0):
             logger.warning(f"{pipe_name} on {run_date_id} has no recent a year traffic data.")
             return_dict["anomaly_flag"] = FLAG.NO_DATA
+            
             return return_dict
         elif quantile_10 == quantile_90:
             logger.warning(f"{pipe_name} on {run_date_id}, recent a year data with "
                            f"same 10% and 90% percentile value - {quantile_10}.")
             return_dict["anomaly_flag"] = FLAG.FLAT_DATA
             return return_dict
-        elif (0 < quantile_90 <= 3) or (0 < quantile_10 <= 3):
-            logger.warning(f"{pipe_name} on {run_date_id}, both of quantile_10 and quantile_90 < 3"
+        elif 0 <= quantile_90 <= 3:
+            logger.warning(f"{pipe_name} on {run_date_id}, both ofquantile_90 < 3. "
                            f"too small to detect.")
             return_dict["anomaly_flag"] = FLAG.INSUFFICIENT_DATA
             return return_dict
@@ -83,16 +90,13 @@ class RollingPercentileDetector(BaseDetector):
         #     logger.warning(f"{pipe_name} on {run_date_id}, quantile_10 is 0, set quantile_10 = 3")
         #     quantile_10 = 3
 
-        return_dict["quantile_10"] = quantile_10
-        return_dict["quantile_90"] = quantile_90
-
         # isolate the most recent `interval_days` rows
         recent = value.sort_values(by=["date_id"], ascending=False).head(interval_days)
 
         # count days whose ship_cnt falls outside [p10, p90]
         anomaly_cnt = 0
         for idx, row in recent.iterrows():
-            if (row["ship_cnt"] < quantile_10) or (row["ship_cnt"] > quantile_90):
+            if (row["ship_cnt"] < quantile_25) or (row["ship_cnt"] > quantile_75):
                 anomaly_cnt += 1
 
         # flag as anomalous when the outlier ratio exceeds the threshold

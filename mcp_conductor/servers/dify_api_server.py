@@ -4,6 +4,7 @@ Simple HTTP API for Dify Integration
 Directly exposes the traffic detection functions as REST endpoints
 """
 import os
+import json
 import logging
 import asyncio
 
@@ -19,13 +20,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import the actual tool functions
-from mcp_conductor.entry.main_traffic_detect import pipe_traffic_detect
+from mcp_conductor.entry.main_traffic_detect import analyze_congestion
 from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 import re
 import calendar
 import sqlite3
 from pathlib import Path
 logger = logging.getLogger("dify_api")
+
+DB_PATH = Path("./data/sisi.sqlite")
 
 app = FastAPI(title="Dify Traffic Detection API")
 
@@ -94,12 +97,22 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
     return run_date, pipe
 
 
+def parse_question_json(question: str) -> tuple[str | None, str | None]:
+    if not question:
+        return None, None
+    
+    structured_question = json.loads(question)
+    run_date = f"{structured_question['year']}-{structured_question['month']}-{structured_question['day']}"
+    pipe_name = structured_question["location"]
+    return run_date, pipe_name
+    
+
+
 @app.get("/api/question_list")
 async def question_list():
     """Return distinct pipe names as pre-built question suggestions."""
     try:
-        db_path = Path("./data/sisi.sqlite")
-        with sqlite3.connect(str(db_path)) as conn:
+        with sqlite3.connect(str(DB_PATH)) as conn:
             rows = conn.execute("SELECT DISTINCT pipe_name FROM ship_cnt_in_pipe").fetchall()
         pipe_names = [r[0] for r in rows]
         question_list = [f"2024年1月 {name}是否拥堵" for name in pipe_names]
@@ -116,7 +129,7 @@ async def detect_anomaly(request: QuestionRequest):
         logger.info(f"Detect anomaly request: {request.question}")
 
         # Parse the question
-        run_date, pipe_name = parse_question(request.question)
+        run_date, pipe_name = parse_question_json(request.question)
         logger.info(f"Detect anomaly parse_question: {run_date}, {pipe_name}")
         if not run_date or not pipe_name:
             return {
@@ -126,14 +139,15 @@ async def detect_anomaly(request: QuestionRequest):
 
         # Query pre-computed detection results from the view
         date_id = int(run_date.replace("-", ""))
-        db_path = Path("./data/sisi.sqlite")
-        with sqlite3.connect(str(db_path)) as conn:
+        with sqlite3.connect(str(DB_PATH)) as conn:
             _sql = f"""
                 SELECT 
                     anomaly_flag, 
                     flag_name, 
                     description, 
                     quantile_10, 
+                    quantile_25,
+                    quantile_75,
                     quantile_90, 
                     anomaly_ratio 
                 FROM 
@@ -154,13 +168,20 @@ async def detect_anomaly(request: QuestionRequest):
                 "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
             }
 
-        anomaly_flag, flag_name, description, quantile_10, quantile_90, anomaly_ratio = row
-        is_anomaly = anomaly_flag == 1
+        anomaly_flag, flag_name, description, quantile_10, quantile_25, quantile_75, quantile_90, anomaly_ratio = row
 
-        if is_anomaly:
-            result_text = f"🚢 检测结果：{run_date} {pipe_name} 发生异常（{description}），近30日异常比率 {anomaly_ratio:.2%}"
+        if anomaly_flag == 0 :
+            result_text = f"✅ 检测结果：{run_date} {pipe_name} 无异常发生（{description})"
+        elif anomaly_flag == 1:
+            result_text = f"🚢 检测结果：{run_date} {pipe_name} 发生异常（{description}), 近30日异常比率 {anomaly_ratio:.2%}"
+        elif anomaly_flag == 2:
+            result_text = f"🚢 检测结果：{run_date} {pipe_name} 无航道通航数据, 通航记录为0"
+        elif anomaly_flag == 3:
+            result_text = f"🚢 检测结果：{run_date} {pipe_name} 航道通航数据异常, 10%与90%分位数 非0且相等"
+        elif anomaly_flag == 4:
+            result_text = f"🚢 检测结果：{run_date} {pipe_name} 航道通航数据异常, 90%分位数 小于 3 艘, 通航艘数太小, 不列入判断."
         else:
-            result_text = f"✅ 检测结果：{run_date} {pipe_name} 无异常发生（{description}），近30日异常比率 {anomaly_ratio:.2%}"
+            raise ValueError(f"anomaly_flag should be in [0,1,2,3,4], currently type -> {type(anomaly_flag)}, value -> {anomaly_flag}")
 
         logger.info(f"Detection result: {result_text}")
         return {
@@ -168,10 +189,12 @@ async def detect_anomaly(request: QuestionRequest):
             "result": result_text,
             "run_date": run_date,
             "pipe_name": pipe_name,
-            "if_anomaly": is_anomaly,
+            "if_anomaly": anomaly_flag == 1,
             "anomaly_flag": anomaly_flag,
             "flag_name": flag_name,
             "quantile_10": quantile_10,
+            "quantile_25": quantile_25,
+            "quantile_75": quantile_75,
             "quantile_90": quantile_90,
             "anomaly_ratio": anomaly_ratio,
         }
@@ -188,7 +211,7 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         logger.info(f"Analyze anomaly reason request: {request.question}")
 
         # Parse the question
-        run_date, pipe_name = parse_question(request.question)
+        run_date, pipe_name = parse_question_json(request.question)
         logger.info(f"analyze_anomaly_reason get {run_date} - {pipe_name}")
         if not run_date or not pipe_name:
             return {
@@ -196,14 +219,36 @@ async def analyze_anomaly_reason(request: QuestionRequest):
                 "message": "无法解析问题。请确保包含年月和通道名称。示例：请分析2023年12月曼德海峡异常的原因"
             }
 
-        # Run analysis in executor
-        loop = asyncio.get_event_loop()
-        analysis_result = await loop.run_in_executor(
-            None,
-            pipe_traffic_detect,
-            run_date,
-            pipe_name
-        )
+        # query anomaly detail
+        date_id = int(run_date.replace("-", ""))
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            _sql = f"""
+                SELECT 
+                    anomaly_flag, 
+                    anomaly_ratio 
+                FROM 
+                    vw_m_pipe_anomaly_roll_percentile 
+                WHERE 
+                    pipe_name = ? AND date_id = ?
+                """
+            logger.debug(_sql)
+            row = conn.execute(
+                _sql,
+                (pipe_name, date_id),
+            ).fetchone()
+        
+        if row is None:
+            logger.info(f"Can't get records from db: {run_date}, {pipe_name}")
+            return {
+                "success": False,
+                "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
+            }
+        
+        # get anomaly ratio
+        _, anomaly_ratio = row
+
+        # trigger analysis
+        reason = analyze_congestion(pipe_name, run_date)
 
         result_text = f"""## 💬 问题
 {request.question}
@@ -212,12 +257,12 @@ async def analyze_anomaly_reason(request: QuestionRequest):
 
 ## 📊 解析信息
 - **📅 日期**: {run_date}
-- **🌊 通道**: {pipe_name}
-
+- **🌊 通道**: {pipe_name} 近30日内异常比例为 {anomaly_ratio}
 ---
 
 ## 🚢 分析结果
-{analysis_result}
+{reason}
+
 """
 
         logger.info(f"Analysis completed for {run_date} {pipe_name}")

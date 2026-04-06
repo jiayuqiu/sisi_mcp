@@ -42,6 +42,8 @@ class TestRollingPercentileDetector(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertIn("anomaly_flag", result)
         self.assertIn("quantile_10", result)
+        self.assertIn("quantile_25", result)
+        self.assertIn("quantile_75", result)
         self.assertIn("quantile_90", result)
         self.assertIn("anomaly_ratio", result)
 
@@ -59,12 +61,12 @@ class TestRollingPercentileDetector(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_normal_recent_returns_normal(self):
-        # 7 recent days all within [p10, p90]
+        # 7 recent days all within [p25, p75] (≈ [34.75, 84.25])
         recent = _make_df(range(101, 108), [55] * 7)
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.NORMAL)
         self.assertEqual(result["anomaly_ratio"], 0.0)
 
@@ -73,12 +75,12 @@ class TestRollingPercentileDetector(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_high_recent_traffic_returns_anomaly(self):
-        # 7 recent days all above p90 (150 >> 99.1)
+        # 7 recent days all above p75 (150 >> 84.25)
         recent = _make_df(range(101, 108), [150] * 7)
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
         self.assertEqual(result["anomaly_ratio"], 1.0)
 
@@ -101,23 +103,23 @@ class TestRollingPercentileDetector(unittest.TestCase):
 
     def test_below_threshold_returns_normal(self):
         # 3 out of 7 anomalous → ratio 3/7 ≈ 0.43 < 0.5 → NORMAL
-        cnts = [150, 150, 150, 55, 55, 55, 55]  # 3 high, 4 normal
+        cnts = [150, 150, 150, 55, 55, 55, 55]  # 3 above p75, 4 within [p25, p75]
         recent = _make_df(range(101, 108), cnts)
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.NORMAL)
         self.assertAlmostEqual(result["anomaly_ratio"], 3 / 7, places=4)
 
     def test_above_threshold_returns_anomaly(self):
         # 4 out of 7 anomalous → ratio 4/7 ≈ 0.57 > 0.5 → ANOMALY
-        cnts = [150, 150, 150, 150, 55, 55, 55]  # 4 high, 3 normal
+        cnts = [150, 150, 150, 150, 55, 55, 55]  # 4 above p75, 3 within [p25, p75]
         recent = _make_df(range(101, 108), cnts)
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
         self.assertAlmostEqual(result["anomaly_ratio"], 4 / 7, places=4)
 

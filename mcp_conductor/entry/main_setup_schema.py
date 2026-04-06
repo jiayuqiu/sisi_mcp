@@ -29,11 +29,14 @@ SQL_CREATE_M_PIPE_ANOMALY_ROLL_PERCENTILE = """
 CREATE TABLE IF NOT EXISTS m_pipe_anomaly_roll_percentile (
     pipe_name              TEXT,
     date_id                INTEGER,  -- YYYYMMDD format
-    anomaly_flag           INTEGER PRIMARY KEY,  -- FK to dim_anomaly_flag.flag_value
+    anomaly_flag           INTEGER,  -- FK to dim_anomaly_flag.flag_value
     quantile_10            REAL,
+    quantile_25            REAL,
+    quantile_75            REAL,
     quantile_90            REAL,
     anomaly_ratio          REAL,     -- outlier days / interval_days
-    updated_timestamp_utc  TEXT      -- ISO-8601, UTC (e.g. 2024-04-05T12:00:00)
+    updated_timestamp_utc  TEXT,     -- ISO-8601, UTC (e.g. 2024-04-05T12:00:00)
+    PRIMARY KEY (pipe_name, date_id)
 );
 """
 
@@ -45,8 +48,27 @@ CREATE TABLE IF NOT EXISTS dim_anomaly_flag (
 );
 """
 
+SQL_CREATE_LOG_AGENT_WORKLOG = """
+CREATE TABLE IF NOT EXISTS log_agent_worklog (
+    return_id TEXT UNIQUE NOT NULL,
+    question_type TEXT,
+    full_response TEXT,
+    payload TEXT,
+    date_id INT,
+    pipe_name TEXT,
+    run_timestamp TEXT DEFAULT (datetime('now')),
+    content TEXT,
+    reasoning_content TEXT,
+    PRIMARY KEY (pipe_name, date_id)
+);
+"""
+
+SQL_DROP_VW_M_PIPE_ANOMALY_ROLL_PERCENTILE = """
+DROP VIEW IF EXISTS vw_m_pipe_anomaly_roll_percentile;
+"""
+
 SQL_CREATE_VW_M_PIPE_ANOMALY_ROLL_PERCENTILE = """
-CREATE VIEW IF NOT EXISTS vw_m_pipe_anomaly_roll_percentile AS
+CREATE VIEW vw_m_pipe_anomaly_roll_percentile AS
 SELECT
     m.pipe_name,
     m.date_id,
@@ -54,6 +76,8 @@ SELECT
     d.flag_name,
     d.description,
     m.quantile_10,
+    m.quantile_25,
+    m.quantile_75,
     m.quantile_90,
     m.anomaly_ratio,
     m.updated_timestamp_utc
@@ -82,6 +106,10 @@ def setup_schema() -> None:
             )
         logger.info("Table dim_anomaly_flag: ready.")
 
+        conn.execute(SQL_CREATE_LOG_AGENT_WORKLOG)
+        logger.info("Table log_agent_worklog: ready.")
+
+        conn.execute(SQL_DROP_VW_M_PIPE_ANOMALY_ROLL_PERCENTILE)
         conn.execute(SQL_CREATE_VW_M_PIPE_ANOMALY_ROLL_PERCENTILE)
         logger.info("View vw_m_pipe_anomaly_roll_percentile: ready.")
 

@@ -23,8 +23,14 @@ logger = get_logger(__name__)
 DB_PATH = Path("./data/sisi.sqlite")
 
 
-def save_to_log(response: dict, payload: str, question_type: str = "weather_news") -> None:
-    """Persist a DeepSeek API response to log_agent_work_history."""
+def save_to_log(
+    response: dict,
+    payload: str,
+    date_id: int,
+    pipe_name: str,
+    question_type: str = "weather_news",
+) -> None:
+    """Persist a DeepSeek API response to log_agent_worklog."""
     try:
         return_id = response.get("id", "")
         content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -33,14 +39,14 @@ def save_to_log(response: dict, payload: str, question_type: str = "weather_news
 
         conn = sqlite3.connect(str(DB_PATH))
         conn.execute(
-            """INSERT INTO log_agent_work_history
-               (return_id, question_type, full_response, payload, content, reasoning_content)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (return_id, question_type, full_response, payload, content, reasoning_content),
+            """INSERT OR REPLACE INTO log_agent_worklog
+               (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content),
         )
         conn.commit()
         conn.close()
-        logger.info("Saved log for return_id=%s", return_id)
+        logger.info("Saved log for return_id=%s, pipe_name=%s, date_id=%s", return_id, pipe_name, date_id)
     except Exception as e:
         logger.error("Failed to save log: %s", e)
 
@@ -64,7 +70,7 @@ def analyze_congestion(pipe_name: str, run_date: str) -> str:
     response = ds_client.search_and_ask(question=question)
     logger.info("DeepSeek response: %s", response)
 
-    save_to_log(response, payload=question, question_type="weather_news")
+    save_to_log(response, payload=question, date_id=run_date_id, pipe_name=pipe_name, question_type="weather_news")
     return response["choices"][0]["message"]["content"]
 
 
@@ -87,14 +93,16 @@ def save_anomaly_results(pipe_anomaly_list: list[dict]) -> None:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO m_pipe_anomaly_roll_percentile
-                        (pipe_name, date_id, anomaly_flag, quantile_10, quantile_90, anomaly_ratio, updated_timestamp_utc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (pipe_name, date_id, anomaly_flag, quantile_10, quantile_25, quantile_75, quantile_90, anomaly_ratio, updated_timestamp_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row["pipe_name"],
                         row["run_date_id"],
                         int(row["anomaly_flag"]),
                         row["quantile_10"],
+                        row["quantile_25"],
+                        row["quantile_75"],
                         row["quantile_90"],
                         row["anomaly_ratio"],
                         updated_at,
