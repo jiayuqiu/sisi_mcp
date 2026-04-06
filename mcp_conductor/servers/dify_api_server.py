@@ -128,9 +128,22 @@ async def detect_anomaly(request: QuestionRequest):
         date_id = int(run_date.replace("-", ""))
         db_path = Path("./data/sisi.sqlite")
         with sqlite3.connect(str(db_path)) as conn:
+            _sql = f"""
+                SELECT 
+                    anomaly_flag, 
+                    flag_name, 
+                    description, 
+                    quantile_10, 
+                    quantile_90, 
+                    anomaly_ratio 
+                FROM 
+                    vw_m_pipe_anomaly_roll_percentile 
+                WHERE 
+                    pipe_name = ? AND date_id = ?
+                """
+            logger.debug(_sql)
             row = conn.execute(
-                "SELECT anomaly_flag, flag_name, description, quantile_10, quantile_90, anomaly_ratio "
-                "FROM vw_m_pipe_anomaly_roll_percentile WHERE pipe_name = ? AND date_id = ?",
+                _sql,
                 (pipe_name, date_id),
             ).fetchone()
 

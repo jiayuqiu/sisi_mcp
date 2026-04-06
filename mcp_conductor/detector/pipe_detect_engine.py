@@ -120,7 +120,7 @@ def single_pipe_detect(signals: pd.DataFrame,
     return detection_result
 
 
-def pipe_rp_detect_engine(run_date: str, pipe_name: str | None) -> list[dict[str, Any]]:
+def pipe_rp_detect_engine(run_date: str, pipe_name: str | None = None) -> list[dict[str, Any]]:
     """
     Run rolling percentile anomaly detection across all straits for a given date.
 
