@@ -67,7 +67,7 @@ services:
     environment:
       - NODE_ENV=production
       - SQLITE_DB_PATH=/app/data/sisi.sqlite
-      - DIFY_INTERNAL_URL=http://nginx/v1
+      - DIFY_INTERNAL_URL=http://sisi-dify-platform-nginx-1/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
