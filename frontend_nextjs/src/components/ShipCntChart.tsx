@@ -139,7 +139,11 @@ function DateInput({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ShipCntChart() {
+interface ShipCntChartProps {
+  onFilterChange?: (pipe: string, start: string, end: string) => void;
+}
+
+export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {}) {
   const [pipes, setPipes] = useState<string[]>([]);
   const [selectedPipe, setSelectedPipe] = useState<string>("");
 
@@ -269,6 +273,14 @@ export default function ShipCntChart() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
+
+  // ── Notify parent of filter changes ───────────────────────────────────────
+
+  useEffect(() => {
+    if (selectedPipe && startDate && endDate && onFilterChange) {
+      onFilterChange(selectedPipe, startDate, endDate);
+    }
+  }, [selectedPipe, startDate, endDate, onFilterChange]);
 
   // ── Quick-select handler ───────────────────────────────────────────────────
 

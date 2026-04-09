@@ -186,15 +186,25 @@ export default function WorkflowPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Filter state synced from the chart
+  const [filterPipe, setFilterPipe] = useState("");
+  const [filterStart, setFilterStart] = useState("");
+  const [filterEnd, setFilterEnd] = useState("");
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const fetchLogs = useCallback(async (p: number) => {
+  const fetchLogs = useCallback(async (p: number, pipe: string, start: string, end: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/workflow-logs?limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`,
-      );
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(p * PAGE_SIZE),
+      });
+      if (pipe) params.set("pipe_name", pipe);
+      if (start) params.set("start_date", start);
+      if (end) params.set("end_date", end);
+      const res = await fetch(`/api/workflow-logs?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: LogsResponse = await res.json();
       setLogs(data.logs);
@@ -207,13 +217,20 @@ export default function WorkflowPage() {
   }, []);
 
   useEffect(() => {
-    fetchLogs(page);
-  }, [page, fetchLogs]);
+    fetchLogs(page, filterPipe, filterStart, filterEnd);
+  }, [page, filterPipe, filterStart, filterEnd, fetchLogs]);
+
+  const handleFilterChange = useCallback((pipe: string, start: string, end: string) => {
+    setFilterPipe(pipe);
+    setFilterStart(start);
+    setFilterEnd(end);
+    setPage(0);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden px-6 py-5 gap-5 max-w-4xl mx-auto w-full">
-      {/* Ship count chart */}
-      <ShipCntChart />
+      {/* Ship count chart — drives the inspector filter */}
+      <ShipCntChart onFilterChange={handleFilterChange} />
 
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
@@ -229,7 +246,7 @@ export default function WorkflowPage() {
           </div>
         </div>
         <button
-          onClick={() => fetchLogs(page)}
+          onClick={() => fetchLogs(page, filterPipe, filterStart, filterEnd)}
           disabled={loading}
           className={cn(
             "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm transition-all",
