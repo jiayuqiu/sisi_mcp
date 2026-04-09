@@ -67,6 +67,8 @@ services:
     environment:
       - NODE_ENV=production
       - SQLITE_DB_PATH=/app/data/sisi.sqlite
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../data:/app/data
     restart: unless-stopped
