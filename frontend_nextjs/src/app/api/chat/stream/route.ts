@@ -1,8 +1,13 @@
 import { NextRequest } from "next/server";
 
 const DIFY_API_KEY = process.env.DIFY_API_KEY ?? "";
+// DIFY_INTERNAL_URL lets Docker containers bypass the public/Tailscale hostname
+// and reach Dify directly via the shared Docker network (e.g. http://nginx/v1).
+// Falls back to DIFY_CHATFLOW_URL for local dev.
 const DIFY_CHATFLOW_URL =
-  process.env.DIFY_CHATFLOW_URL ?? "https://api.dify.ai/v1";
+  process.env.DIFY_INTERNAL_URL ??
+  process.env.DIFY_CHATFLOW_URL ??
+  "https://api.dify.ai/v1";
 
 export async function POST(req: NextRequest) {
   if (!DIFY_API_KEY) {
