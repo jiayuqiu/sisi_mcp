@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 interface DataPoint {
   date: string;
   ship_cnt: number;
-  detection_flag: string | null;
+  anomaly_flag: number | null;
 }
 
 interface ShipCntResponse {
@@ -38,10 +38,21 @@ const TIME_WINDOWS = [
   { label: "All", days: 0 },
 ];
 
-const FLAG_COLORS: Record<string, string> = {
-  红: "#ef4444",
-  黄: "#f59e0b",
-  绿: "#10b981",
+// anomaly_flag: 0=green, 1=red, 2/3/4=yellow
+const ANOMALY_COLORS: Record<number, string> = {
+  0: "#10b981",
+  1: "#ef4444",
+  2: "#f59e0b",
+  3: "#f59e0b",
+  4: "#f59e0b",
+};
+
+const ANOMALY_LABELS: Record<number, string> = {
+  0: "绿灯",
+  1: "红灯",
+  2: "黄灯",
+  3: "黄灯",
+  4: "黄灯",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -69,9 +80,10 @@ function CustomTooltip({
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0].payload;
-  const flagColor = point.detection_flag
-    ? FLAG_COLORS[point.detection_flag]
-    : null;
+  const flagColor =
+    point.anomaly_flag != null ? ANOMALY_COLORS[point.anomaly_flag] : null;
+  const flagLabel =
+    point.anomaly_flag != null ? ANOMALY_LABELS[point.anomaly_flag] : null;
 
   return (
     <div className="bg-navy-800 border border-navy-600 rounded-xl px-3.5 py-2.5 shadow-xl text-xs space-y-1">
@@ -80,15 +92,13 @@ function CustomTooltip({
         通航船数量:{" "}
         <span className="text-teal-400 text-sm">{point.ship_cnt}</span>
       </p>
-      {point.detection_flag && (
+      {flagColor && flagLabel && (
         <p className="flex items-center gap-1.5">
           <span
             className="inline-block w-2 h-2 rounded-full"
-            style={{ backgroundColor: flagColor ?? "#94a3b8" }}
+            style={{ backgroundColor: flagColor }}
           />
-          <span style={{ color: flagColor ?? "#94a3b8" }}>
-            {point.detection_flag}
-          </span>
+          <span style={{ color: flagColor }}>{flagLabel}</span>
         </p>
       )}
     </div>
@@ -324,7 +334,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
   };
 
   const tickInterval = Math.max(0, Math.floor(data.length / 8) - 1);
-  const redFlags = data.filter((d) => d.detection_flag === "红");
+  const redFlags = data.filter((d) => d.anomaly_flag === 1);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -507,37 +517,46 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
                     cy: number;
                     payload: DataPoint;
                   };
-                  if (payload.detection_flag === "红") {
+                  const color =
+                    payload.anomaly_flag != null
+                      ? ANOMALY_COLORS[payload.anomaly_flag]
+                      : null;
+                  if (color) {
+                    const isObvious = payload.anomaly_flag === 1 || (payload.anomaly_flag != null && payload.anomaly_flag >= 2);
                     return (
                       <g key={`dot-${payload.date}`}>
-                        {/* vertical drop line */}
-                        <line
-                          x1={cx}
-                          y1={0}
-                          x2={cx}
-                          y2={cy - 5}
-                          stroke="#ef4444"
-                          strokeWidth={1}
-                          strokeDasharray="3 2"
-                          opacity={0.5}
-                        />
-                        {/* outer glow ring */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={6}
-                          fill="#ef444420"
-                          stroke="#ef444460"
-                          strokeWidth={1}
-                        />
+                        {/* vertical drop line — only for red/yellow */}
+                        {isObvious && (
+                          <line
+                            x1={cx}
+                            y1={0}
+                            x2={cx}
+                            y2={cy - 5}
+                            stroke={color}
+                            strokeWidth={1}
+                            strokeDasharray="3 2"
+                            opacity={0.5}
+                          />
+                        )}
+                        {/* outer glow ring — only for red/yellow */}
+                        {isObvious && (
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={6}
+                            fill={`${color}20`}
+                            stroke={`${color}60`}
+                            strokeWidth={1}
+                          />
+                        )}
                         {/* solid centre dot */}
                         <circle
                           cx={cx}
                           cy={cy}
-                          r={3}
-                          fill="#ef4444"
+                          r={isObvious ? 3 : 2}
+                          fill={color}
                           stroke="#0f172a"
-                          strokeWidth={1.5}
+                          strokeWidth={isObvious ? 1.5 : 1}
                         />
                       </g>
                     );
@@ -564,27 +583,19 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
           <span className="inline-block w-3 h-0.5 bg-teal-500 rounded" />
           <span>通航船数量</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <svg width="14" height="14" viewBox="0 0 14 14">
-            <circle
-              cx="7"
-              cy="7"
-              r="5"
-              fill="#ef444420"
-              stroke="#ef444460"
-              strokeWidth="1"
-            />
-            <circle
-              cx="7"
-              cy="7"
-              r="3"
-              fill="#ef4444"
-              stroke="#0f172a"
-              strokeWidth="1.5"
-            />
-          </svg>
-          <span>异常标记（红）</span>
-        </div>
+        {([
+          { color: "#ef4444", label: "红灯" },
+          { color: "#f59e0b", label: "黄灯" },
+          { color: "#10b981", label: "绿灯" },
+        ] as { color: string; label: string }[]).map(({ color, label }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <circle cx="7" cy="7" r="5" fill={`${color}20`} stroke={`${color}60`} strokeWidth="1" />
+              <circle cx="7" cy="7" r="3" fill={color} stroke="#0f172a" strokeWidth="1.5" />
+            </svg>
+            <span>{label}</span>
+          </div>
+        ))}
         {selectedPipe && (
           <span className="ml-auto text-slate-600 font-mono">
             {selectedPipe}

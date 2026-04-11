@@ -9,7 +9,7 @@ const DB_PATH =
 interface ShipCntRow {
   date_id: number;
   ship_cnt: number;
-  detection_flag: string | null;
+  anomaly_flag: number | null;
 }
 
 function toDateId(dateStr: string): number {
@@ -58,10 +58,12 @@ export async function GET(req: NextRequest) {
 
     const rows = db
       .prepare(
-        `SELECT date_id, ship_cnt, detection_flag
-         FROM ship_cnt_in_pipe
-         WHERE pipe_name = ? AND date_id >= ? AND date_id <= ?
-         ORDER BY date_id ASC`,
+        `SELECT s.date_id, s.ship_cnt, a.anomaly_flag
+         FROM ship_cnt_in_pipe s
+         LEFT JOIN m_pipe_anomaly_roll_percentile a
+           ON a.pipe_name = s.pipe_name AND a.date_id = s.date_id
+         WHERE s.pipe_name = ? AND s.date_id >= ? AND s.date_id <= ?
+         ORDER BY s.date_id ASC`,
       )
       .all(pipe_name, startId, endId) as ShipCntRow[];
 
@@ -91,7 +93,7 @@ export async function GET(req: NextRequest) {
       return {
         date: dateStr,
         ship_cnt: r.ship_cnt,
-        detection_flag: r.detection_flag ?? null,
+        anomaly_flag: r.anomaly_flag ?? null,
       };
     });
 

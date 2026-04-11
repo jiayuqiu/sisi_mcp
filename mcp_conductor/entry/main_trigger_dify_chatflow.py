@@ -222,12 +222,30 @@ def run(
                 user=user,
                 timeout=timeout,
             )
-            answer_preview = (resp.get("answer") or "")[:120].replace("\n", " ")
+            answer = resp.get("answer") or ""
             message_id = resp.get("message_id", "")
+            return_id = f"dify-{message_id}" if message_id else None
+            answer_preview = answer[:120].replace("\n", " ")
             logger.info(
                 "[%d/%d] OK message_id=%s answer=%s...",
                 i, total, message_id, answer_preview,
             )
+            # Write answer into log_agent_worklog if the row exists but has no content
+            if return_id and answer:
+                with sqlite3.connect(str(DB_PATH)) as conn:
+                    conn.execute(
+                        """UPDATE log_agent_worklog
+                           SET content = ?
+                           WHERE return_id = ? AND (content IS NULL OR content = '')""",
+                        (answer, return_id),
+                    )
+                    updated = conn.execute(
+                        "SELECT changes()"
+                    ).fetchone()[0]
+                if updated:
+                    logger.info("[%d/%d] Saved content to DB for return_id=%s", i, total, return_id)
+                else:
+                    logger.debug("[%d/%d] No DB row updated for return_id=%s (row may already have content or not exist)", i, total, return_id)
             succeeded += 1
         except requests.exceptions.RequestException as e:
             failed += 1
