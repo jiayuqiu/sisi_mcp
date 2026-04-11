@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Ship, MessageSquare, BarChart2 } from "lucide-react";
+import { Ship, BarChart2 } from "lucide-react";
 import { clsx } from "clsx";
 
 const navLinks = [
-  { href: "/workflow", label: "Workflow",   icon: BarChart2 },
+  { href: "/workflow", label: "海峡通道专员", icon: BarChart2 },
 ];
 
 export default function Navbar() {
@@ -20,7 +20,7 @@ export default function Navbar() {
           <Ship className="w-4 h-4 text-teal-400" />
         </div>
         <span className="font-semibold text-white tracking-wide text-sm">
-          Sisi<span className="text-teal-400">MCP</span>
+          SISI<span className="text-teal-400">航运专家</span>
         </span>
       </Link>
 

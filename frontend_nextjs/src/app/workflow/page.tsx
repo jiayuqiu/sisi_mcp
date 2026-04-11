@@ -240,7 +240,7 @@ export default function WorkflowPage() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-white">
-              Workflow Inspector
+              分析日志
             </h1>
             <p className="text-xs text-slate-500">{total} agent call records</p>
           </div>
