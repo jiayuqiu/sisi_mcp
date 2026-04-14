@@ -1,6 +1,10 @@
 PATH=/usr/local/bin:/usr/bin:/bin
 
-0 2 * * * cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py >> /var/log/bci_sync.log 2>&1
+# sync metrics data
+0 2 * * * cd /app && uv run python mcp_conductor/entry/main_sync_bci_data.py --start_date=$(date -d yesterday +\%Y-\%m-\%d) --end_date=$(date -d yesterday +\%Y-\%m-\%d)>> /var/log/bci_sync.log 2>&1
+
+# traffic detect task
+0 3 * * * cd /app && uv run python mcp_conductor/entry/main_traffic_detect.py --run_date=$(date -d yesterday +\%Y-\%m-\%d) >> /var/log/traffic_detect.log 2>&1
 
 # for in case, run yesterday, should run today, will update later.
-0 3 * * * cd /app && uv run python -m mcp_conductor.entry.main_trigger_dify_chatflow --start-date $(date -d yesterday +\%Y-\%m-\%d) --end-date $(date -d yesterday +\%Y-\%m-\%d) --sleep 2 >> /var/log/trigger_chatflow.log 2>&1
+0 4 * * * cd /app && uv run python -m mcp_conductor.entry.main_trigger_dify_chatflow --start-date $(date -d yesterday +\%Y-\%m-\%d) --end-date $(date -d yesterday +\%Y-\%m-\%d) --sleep 2 >> /var/log/trigger_chatflow.log 2>&1
