@@ -10,6 +10,130 @@
       "url": "http://host.docker.internal:8002"
     }
   ],
+  "components": {
+    "schemas": {
+      "AnalyzeAnomalyQuestionObject": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "year": {
+            "type": "string",
+            "description": "年份，格式 YYYY",
+            "example": "2026"
+          },
+          "month": {
+            "type": "string",
+            "description": "月份，格式 MM",
+            "example": "04"
+          },
+          "day": {
+            "type": "string",
+            "description": "日期，格式 DD",
+            "example": "16"
+          },
+          "location": {
+            "type": "string",
+            "description": "通道名称",
+            "example": "霍尔木兹海峡"
+          }
+        },
+        "required": [
+          "year",
+          "month",
+          "day",
+          "location"
+        ]
+      },
+      "AnalyzeAnomalyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "description": "问题入参。推荐传 JSON 字符串：{\"year\",\"month\",\"day\",\"location\"}，与当前后端解析逻辑完全一致。",
+            "anyOf": [
+              {
+                "type": "string",
+                "example": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
+              },
+              {
+                "$ref": "#/components/schemas/AnalyzeAnomalyQuestionObject"
+              }
+            ]
+          }
+        },
+        "required": [
+          "question"
+        ]
+      },
+      "AnalyzeAnomalySuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "result": {
+            "type": "string",
+            "description": "汇总文本，格式为结论/天气因素/政治因素三段"
+          },
+          "run_date": {
+            "type": "string",
+            "description": "检测日期，格式 YYYY-MM-DD",
+            "example": "2026-04-16"
+          },
+          "pipe_name": {
+            "type": "string",
+            "description": "通道名称",
+            "example": "霍尔木兹海峡"
+          },
+          "conclusion": {
+            "type": "string",
+            "description": "异常结论，格式如：20260416日，霍尔木兹海峡发生交通异常"
+          },
+          "weather_factor": {
+            "type": "string",
+            "description": "天气因素分析"
+          },
+          "political_factor": {
+            "type": "string",
+            "description": "政治/安全因素分析"
+          }
+        },
+        "required": [
+          "success",
+          "result",
+          "run_date",
+          "pipe_name",
+          "conclusion",
+          "weather_factor",
+          "political_factor"
+        ]
+      },
+      "AnalyzeAnomalyErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "失败原因说明"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ]
+      }
+    }
+  },
   "paths": {
     "/api/analyze_anomaly_reason": {
       "post": {
@@ -21,15 +145,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "question": {
-                    "type": "string",
-                    "description": "用中文提出的问题，包含年月、通道名称和分析请求",
-                    "example": "请分析2023年12月曼德海峡发生异常的原因"
+                "$ref": "#/components/schemas/AnalyzeAnomalyRequest"
+              },
+              "examples": {
+                "json_string_input": {
+                  "summary": "推荐：JSON 字符串输入",
+                  "value": {
+                    "question": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
                   }
-                },
-                "required": ["question"]
+                }
               }
             }
           }
@@ -40,25 +164,41 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AnalyzeAnomalySuccessResponse"
                     },
-                    "result": {
-                      "type": "string",
-                      "description": "Markdown格式的分析结果"
-                    },
-                    "run_date": {
-                      "type": "string"
-                    },
-                    "pipe_name": {
-                      "type": "string"
+                    {
+                      "$ref": "#/components/schemas/AnalyzeAnomalyErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "success_example": {
+                    "summary": "成功示例",
+                    "value": {
+                      "success": true,
+                      "result": "- 结论\n20260416日，霍尔木兹海峡发生交通异常\n\n- 天气因素\n西北风增强并伴随能见度下降，可能导致船舶通行效率下降。\n\n- 政治因素\n地区军事活动升级与临时海上管制风险上升，可能导致通航延误。",
+                      "run_date": "2026-04-16",
+                      "pipe_name": "霍尔木兹海峡",
+                      "conclusion": "20260416日，霍尔木兹海峡发生交通异常",
+                      "weather_factor": "西北风增强并伴随能见度下降，可能导致船舶通行效率下降。",
+                      "political_factor": "地区军事活动升级与临时海上管制风险上升，可能导致通航延误。"
+                    }
+                  },
+                  "error_example": {
+                    "summary": "失败示例",
+                    "value": {
+                      "success": false,
+                      "message": "未找到 2026-04-16 霍尔木兹海峡 的检测结果，请确认日期和通道名称是否正确。"
                     }
                   }
                 }
               }
             }
+          },
+          "500": {
+            "description": "服务端异常"
           }
         }
       }

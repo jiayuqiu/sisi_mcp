@@ -23,7 +23,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(),  # stderr
-        logging.FileHandler("./tmp/mcp_server.log", mode="a", encoding="utf-8")
+        logging.FileHandler("/tmp/mcp_server.log", mode="a", encoding="utf-8")
     ]
 )
 logger = logging.getLogger("mcp_server")

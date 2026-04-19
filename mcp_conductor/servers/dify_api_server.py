@@ -114,6 +114,18 @@ def parse_question_json(question: str) -> tuple[str | None, str | None]:
     run_date = f"{structured_question['year']}-{structured_question['month']}-{structured_question['day']}"
     pipe_name = structured_question["location"]
     return run_date, pipe_name
+
+
+def _pick_factor_sentence(text: str, keywords: list[str], fallback: str) -> str:
+    """Pick the first sentence that contains any keyword; otherwise return fallback."""
+    if not text:
+        return fallback
+
+    sentences = [s.strip() for s in re.split(r"(?<=[。！？!?])\s*", text) if s.strip()]
+    for sent in sentences:
+        if any(k in sent for k in keywords):
+            return sent
+    return fallback
     
 
 
@@ -257,29 +269,51 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         _, anomaly_ratio = row
 
         # trigger analysis
-        reason = analyze_congestion(pipe_name, run_date)
+        analysis = analyze_congestion(pipe_name, run_date)
 
-        result_text = f"""## 💬 问题
-{request.question}
+        combined_reason_text = "\n".join(
+            part
+            for part in [
+                analysis.get("summary", ""),
+                analysis.get("weather_factor", ""),
+                analysis.get("political_factor", ""),
+                analysis.get("raw_content", ""),
+                analysis.get("reasoning_content", ""),
+            ]
+            if part
+        )
 
----
+        date_id = run_date.replace("-", "")
+        conclusion = f"{date_id}日，{pipe_name}发生交通异常"
+        weather_factor = analysis.get("weather_factor") or _pick_factor_sentence(
+            combined_reason_text,
+            ["天气", "风", "雨", "能见度", "海况", "台风", "风暴", "雾"],
+            "未检索到显著天气风险信号。",
+        )
+        political_factor = analysis.get("political_factor") or _pick_factor_sentence(
+            combined_reason_text,
+            ["政治", "冲突", "军事", "局势", "封锁", "制裁", "地缘", "安全"],
+            "未检索到显著政治风险信号。",
+        )
 
-## 📊 解析信息
-- **📅 日期**: {run_date}
-- **🌊 通道**: {pipe_name} 近30日内异常比例为 {anomaly_ratio}
----
-
-## 🚢 分析结果
-{reason}
-
-"""
+        result_text = (
+            "- 结论\n"
+            f"{conclusion}\n\n"
+            "- 天气因素\n"
+            f"{weather_factor}\n\n"
+            "- 政治因素\n"
+            f"{political_factor}"
+        )
 
         logger.info(f"Analysis completed for {run_date} {pipe_name}")
         return {
             "success": True,
             "result": result_text,
             "run_date": run_date,
-            "pipe_name": pipe_name
+            "pipe_name": pipe_name,
+            "conclusion": conclusion,
+            "weather_factor": weather_factor,
+            "political_factor": political_factor,
         }
 
     except Exception as e:

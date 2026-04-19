@@ -37,6 +37,13 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  if (pipe_name.startsWith("test_")) {
+    return NextResponse.json(
+      { error: "pipe_name is not available" },
+      { status: 404 },
+    );
+  }
+
   // Resolve cutoff date_ids
   let startId: number;
   let endId: number = 99991231; // far future — no upper bound by default
@@ -71,7 +78,7 @@ export async function GET(req: NextRequest) {
     const pipes = (
       db
         .prepare(
-          "SELECT DISTINCT pipe_name FROM ship_cnt_in_pipe ORDER BY pipe_name",
+          "SELECT DISTINCT pipe_name FROM ship_cnt_in_pipe WHERE pipe_name NOT LIKE 'test\\_%' ESCAPE '\\' ORDER BY pipe_name",
         )
         .all() as { pipe_name: string }[]
     ).map((r) => r.pipe_name);

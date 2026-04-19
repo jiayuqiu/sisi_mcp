@@ -166,7 +166,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
   const [endDate, setEndDate] = useState<string>("");
 
   // Which quick-select is active (null = custom range)
-  const [activeWindow, setActiveWindow] = useState<number | null>(0); // 0 = All
+  const [activeWindow, setActiveWindow] = useState<number | null>(90); // default = 3M
 
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -214,11 +214,17 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
         setSelectedPipe("曼德海峡");
         const mn = json.min_date ?? "2022-01-01";
         const mx = json.max_date ?? new Date().toISOString().slice(0, 10);
+        const defaultStart = (() => {
+          const s = subtractDays(mx, 90);
+          return s < mn ? mn : s;
+        })();
         setMinDate(mn);
         setMaxDate(mx);
-        setStartDate(mn);
+        setStartDate(defaultStart);
         setEndDate(mx);
-        setData(json.data);
+        setData(
+          json.data.filter((d) => d.date >= defaultStart && d.date <= mx),
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load chart data");
       } finally {
@@ -259,7 +265,9 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
         }
         setStartDate(newStart);
         setEndDate(newEnd);
-        setData(json.data);
+        setData(
+          json.data.filter((d) => d.date >= newStart && d.date <= newEnd),
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load chart data");
       } finally {

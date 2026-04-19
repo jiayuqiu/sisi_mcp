@@ -6,7 +6,9 @@ context around that date, then return the summary.
 TODO: not a entry script, will move to a better place later.
 """
 import argparse
+import json
 import logging
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +19,12 @@ from mcp_conductor.resources.utils.db import get_engine
 from mcp_conductor.resources.utils.logger import get_logger
 from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
-from mcp_conductor.templates.questions import WEB_SEARCH_WEATHER_NEWS
+from mcp_conductor.templates.questions import (
+    ENRICH_ANOMALY_FACTORS,
+    WEB_SEARCH_WEATHER_NEWS_RETRY,
+    WEB_SEARCH_WEATHER_NEWS_STRUCTURED,
+    WEB_SEARCH_WEATHER_NEWS_WITH_EVIDENCE,
+)
 from mcp_conductor.resources.utils.db import save_to_log
 
 
@@ -36,17 +43,153 @@ def load_pipe_data(pipe_name: str) -> pd.DataFrame:
     return df
 
 
-def analyze_congestion(pipe_name: str, run_date: str) -> str:
+def _extract_json_object(text: str) -> dict[str, str] | None:
+    """Extract the first JSON object from a model response."""
+    if not text:
+        return None
+
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        data = json.loads(cleaned)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if not match:
+        return None
+
+    try:
+        data = json.loads(match.group(0))
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _has_valid_sources(data: dict[str, object]) -> bool:
+    sources = data.get("sources")
+    if not isinstance(sources, list) or len(sources) < 2:
+        return False
+    valid = 0
+    for item in sources:
+        if isinstance(item, dict):
+            url = str(item.get("url", "")).strip()
+            if url.startswith("http://") or url.startswith("https://"):
+                valid += 1
+    return valid >= 2
+
+
+def _needs_expansion(weather_factor: str, political_factor: str) -> bool:
+    weak_markers = ["未检索到显著", "无显著", "风险较低"]
+    text = f"{weather_factor}\n{political_factor}"
+    if any(m in text for m in weak_markers):
+        return True
+    if len(weather_factor.strip()) < 40 or len(political_factor.strip()) < 50:
+        return True
+    return False
+
+
+def _expand_factors(
+    ds_client: DeepSeekClient,
+    run_date_id: int,
+    pipe_name: str,
+    summary: str,
+    weather_factor: str,
+    political_factor: str,
+    sources_json: str,
+) -> tuple[str, str]:
+    prompt = ENRICH_ANOMALY_FACTORS.format(
+        date_id=run_date_id,
+        pipe_name=pipe_name,
+        summary=summary,
+        weather_factor=weather_factor or "",
+        political_factor=political_factor or "",
+        sources_json=sources_json,
+    )
+    response = ds_client.chat(
+        messages=[{"role": "user", "content": prompt}],
+        model="deepseek-chat",
+        web_search=False,
+        temperature=0.2,
+    )
+    content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+    parsed = _extract_json_object(content) or {}
+    w = str(parsed.get("weather_factor", "")).strip() or weather_factor
+    p = str(parsed.get("political_factor", "")).strip() or political_factor
+    return w, p
+
+
+def analyze_congestion(pipe_name: str, run_date: str) -> dict[str, str]:
     """Query DeepSeek for weather/news context on the anomaly date."""
     run_date_id = int(run_date.replace("-", ""))
     ds_client = DeepSeekClient()
 
-    question = WEB_SEARCH_WEATHER_NEWS.format(date_id=run_date_id, pipe_name=pipe_name)
+    run_date_obj = datetime.strptime(run_date, "%Y-%m-%d").date()
+    today = datetime.now(timezone.utc).date()
+    if run_date_obj > today:
+        question = WEB_SEARCH_WEATHER_NEWS_WITH_EVIDENCE.format(date_id=run_date_id, pipe_name=pipe_name)
+    else:
+        question = WEB_SEARCH_WEATHER_NEWS_STRUCTURED.format(date_id=run_date_id, pipe_name=pipe_name)
+
     response = ds_client.search_and_ask(question=question)
     logger.info("DeepSeek response: %s", response)
 
+    message = response["choices"][0]["message"]
+    content = message.get("content", "")
+    reasoning_content = message.get("reasoning_content", "")
+
+    parsed = _extract_json_object(content) or {}
+
+    # Retry once when the first answer has no usable evidence.
+    if not _has_valid_sources(parsed):
+        retry_question = WEB_SEARCH_WEATHER_NEWS_RETRY.format(date_id=run_date_id, pipe_name=pipe_name)
+        retry_response = ds_client.search_and_ask(question=retry_question)
+        logger.info("DeepSeek retry response: %s", retry_response)
+        retry_message = retry_response["choices"][0]["message"]
+        retry_content = retry_message.get("content", "")
+        retry_parsed = _extract_json_object(retry_content) or {}
+        if _has_valid_sources(retry_parsed):
+            response = retry_response
+            message = retry_message
+            content = retry_content
+            reasoning_content = retry_message.get("reasoning_content", "")
+            parsed = retry_parsed
+
+    summary = str(parsed.get("summary", "") or content).strip()
+    weather_factor = str(parsed.get("weather_factor", "")).strip()
+    political_factor = str(parsed.get("political_factor", "")).strip()
+    sources = parsed.get("sources") if isinstance(parsed.get("sources"), list) else []
+
+    normalized_prefix = f"{run_date_id}日，"
+    summary = re.sub(r"^\s*\d{4}年\d{1,2}月\d{1,2}日，?", normalized_prefix, summary)
+
+    if _needs_expansion(weather_factor, political_factor):
+        sources_json = json.dumps(sources, ensure_ascii=False)
+        weather_factor, political_factor = _expand_factors(
+            ds_client=ds_client,
+            run_date_id=run_date_id,
+            pipe_name=pipe_name,
+            summary=summary,
+            weather_factor=weather_factor,
+            political_factor=political_factor,
+            sources_json=sources_json,
+        )
+
+    response["choices"][0]["message"]["content"] = summary
+
     save_to_log(response, payload=question, date_id=run_date_id, pipe_name=pipe_name, question_type="weather_news")
-    return response["choices"][0]["message"]["content"]
+    return {
+        "summary": summary,
+        "weather_factor": weather_factor,
+        "political_factor": political_factor,
+        "sources": json.dumps(sources, ensure_ascii=False),
+        "raw_content": content,
+        "reasoning_content": reasoning_content,
+    }
 
 
 def save_anomaly_results(pipe_anomaly_list: list[dict]) -> None:

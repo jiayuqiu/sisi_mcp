@@ -180,7 +180,7 @@ class MetricsAPI(object):
         }
         return params_to_sign, timestamp, nonce
 
-    def get_canal_traffic(
+    def get_metrics_value(
         self, start_date: str, end_date: str, zbxxs_val: str = "101-0003,101-0004"
     ) -> Dict[str, Any]:
         params_to_sign, timestamp, nonce = self._build_signature_params(

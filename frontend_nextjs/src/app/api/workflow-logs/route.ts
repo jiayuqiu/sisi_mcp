@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       .prepare(
         `SELECT return_id, question_type, date_id, pipe_name, content, reasoning_content
          FROM log_agent_worklog ${where}
-         ORDER BY run_timestamp DESC LIMIT ? OFFSET ?`
+         ORDER BY date_id DESC, run_timestamp DESC LIMIT ? OFFSET ?`
       )
       .all(...params, limit, offset);
 

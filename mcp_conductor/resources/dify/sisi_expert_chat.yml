@@ -351,9 +351,7 @@ workflow:
       type: custom
       width: 242
     - data:
-        answer: '结论: {{#1770528546254.result#}}
-
-          分析: {{#1770528713574.reason#}}{{#1775446075083.text#}}{{#1775445602881.text#}}'
+        answer: '{{#1770528713574.formatted_output#}}{{#1775446075083.text#}}{{#1775445602881.text#}}'
         selected: false
         title: Answer
         type: answer
@@ -519,20 +517,20 @@ workflow:
       type: custom
       width: 242
     - data:
-        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    # Parse\
-          \ the JSON string\n    data = json.loads(analysis_result)\n    \n    # Extract\
-          \ fields\n    success = data.get(\"success\", False)\n    result = data.get(\"\
-          result\", \"\")\n    run_date = data.get(\"run_date\", \"\")\n    pipe_name\
-          \ = data.get(\"pipe_name\", \"\")\n    \n    return {\n        \"success\"\
-          : success,\n        \"reason\": result,\n        \"run_date\": run_date,\n\
-          \        \"pipe_name\": pipe_name\n    }\n"
+        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    data = json.loads(analysis_result)\n\n    success = data.get(\"success\", False)\n    run_date = data.get(\"run_date\", \"\")\n    pipe_name = data.get(\"pipe_name\", \"\")\n\n    conclusion = data.get(\"conclusion\", \"\")\n    weather_factor = data.get(\"weather_factor\", \"\")\n    political_factor = data.get(\"political_factor\", \"\")\n\n    if not conclusion and run_date and pipe_name:\n        conclusion = f\"{run_date.replace('-', '')}日，{pipe_name}发生交通异常\"\n\n    if not weather_factor:\n        weather_factor = \"未检索到显著天气风险信号。\"\n\n    if not political_factor:\n        political_factor = \"未检索到显著政治风险信号。\"\n\n    formatted_output = (\n        \"- 结论\\n\"\n        f\"{conclusion}\\n\\n\"\n        \"- 天气因素\\n\"\n        f\"{weather_factor}\\n\\n\"\n        \"- 政治因素\\n\"\n        f\"{political_factor}\"\n    )\n\n    return {\n        \"success\": success,\n        \"run_date\": run_date,\n        \"pipe_name\": pipe_name,\n        \"conclusion\": conclusion,\n        \"weather_factor\": weather_factor,\n        \"political_factor\": political_factor,\n        \"formatted_output\": formatted_output,\n    }\n"
         code_language: python3
         desc: Parse reason
         outputs:
+          conclusion:
+            children: null
+            type: string
+          formatted_output:
+            children: null
+            type: string
           pipe_name:
             children: null
             type: string
-          reason:
+          political_factor:
             children: null
             type: string
           run_date:
@@ -541,6 +539,9 @@ workflow:
           success:
             children: null
             type: boolean
+          weather_factor:
+            children: null
+            type: string
         selected: false
         title: Parse reason
         type: code

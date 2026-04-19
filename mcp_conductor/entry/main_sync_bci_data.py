@@ -57,7 +57,7 @@ def sync_bci_data(start_date: str, end_date: str):
     api = MetricsAPI()
     logger.info("Fetching BCI metrics from %s to %s...", start_date, end_date)
 
-    response = api.get_canal_traffic(start_date, end_date)
+    response = api.get_metrics_value(start_date, end_date)
 
     if not response or not response.get("success"):
         msg = f"API request failed: {response}"
@@ -116,8 +116,8 @@ if __name__ == "__main__":
     setup_schema()
 
     parser = argparse.ArgumentParser(description="Sync BCI indicator data to local SQLite")
-    parser.add_argument("--start_date", type=str, help="Override start date (YYYY-MM-DD)")
-    parser.add_argument("--end_date", type=str, help="Override end date (YYYY-MM-DD), defaults to today")
+    parser.add_argument("--start-date", type=str, help="Override start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=str, help="Override end date (YYYY-MM-DD), defaults to today")
     args = parser.parse_args()
 
     today = datetime.now().strftime("%Y-%m-%d")

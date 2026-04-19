@@ -2,18 +2,23 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install uv for fast dependency management
 RUN pip install uv
 
-# Copy dependency files + minimal package stub for caching
+ARG APP_UID=1000
+ARG APP_GID=1000
+RUN groupadd -g ${APP_GID} sisillm && useradd -m -u ${APP_UID} -g ${APP_GID} sisillm || true
+RUN mkdir -p /home/sisillm && chown sisillm:sisillm /home/sisillm
+
 COPY pyproject.toml uv.lock ./
 COPY mcp_conductor/__init__.py mcp_conductor/__init__.py
 
-# Install dependencies (cached unless pyproject.toml/uv.lock change)
 RUN uv sync --frozen --no-dev
 
-# Copy remaining source code
 COPY . .
 
-# Create tmp directories
 RUN mkdir -p ./tmp/images
+
+RUN chown -R sisillm:sisillm /app
+RUN mkdir -p /app/.cache/uv && chown -R sisillm:sisillm /app/.cache
+RUN mkdir -p /app/.cache/matplotlib && chown -R sisillm:sisillm /app/.cache/matplotlib
+USER sisillm

@@ -12,7 +12,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from mcp_conductor.resources.sisi.APIs.metrics_api import generate_signature, get_bci_metrics, BASE_URL, APP_ID
+from mcp_conductor.resources.sisi.APIs.metrics_api import (
+    APP_ID,
+    BASE_URL,
+    MetricsAPI,
+    generate_signature,
+    get_bci_metrics,
+)
 
 
 class TestSignatureGeneration(unittest.TestCase):
@@ -25,9 +31,9 @@ class TestSignatureGeneration(unittest.TestCase):
         self.test_params = {
             "appId": self.app_id,
             "client": self.app_id,
-            "endDay": "2022-07-01",
+            "endDay": "2026-04-16",
             "nonce": "1234567890",
-            "startDay": "2022-07-01",
+            "startDay": "2026-04-16",
             "timestamp": "1656633600",
         }
 
@@ -111,8 +117,8 @@ class TestBCIMetricsAPI(unittest.TestCase):
         """Set up test fixtures."""
         self.app_id = APP_ID
         self.client = self.app_id
-        self.start_day = "2022-07-01"
-        self.end_day = "2022-07-01"
+        self.start_day = "2026-04-16"
+        self.end_day = "2026-04-16"
         self.base_url = BASE_URL
 
     @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
@@ -253,9 +259,10 @@ class TestBCIMetricsAPI(unittest.TestCase):
         import json
         
         # Use dates and indicators from channel.py example
-        start_date = "2022-07-01"
-        end_date = "2022-07-01"
-        zbxxs_val = "101-0003,101-0004"
+        start_date = "2026-04-16"
+        end_date = "2026-04-16"
+        # zbxxs_val = "101-0003,101-0004"
+        zbxxs_val = "101-0001,101-0002"
         
         print(f"\nSending real API request to {self.base_url}...")
         result = get_bci_metrics(
@@ -372,6 +379,102 @@ class TestAPIParameterValidation(unittest.TestCase):
         self.assertEqual(params["zbxxs"], zbxxs)
         # Verify commas are preserved
         self.assertEqual(params["zbxxs"].count(","), 2)
+
+
+class TestMetricsAPIGetMetricsValue(unittest.TestCase):
+    """Unit tests for MetricsAPI.get_metrics_value."""
+
+    def setUp(self):
+        self.api = MetricsAPI()
+
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
+    def test_get_metrics_value_success_default_zbxxs(self, mock_get):
+        mock_response = Mock()
+        mock_response.json.return_value = {"success": True, "result": []}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        result = self.api.get_metrics_value("2026-04-16", "2026-04-16")
+
+        self.assertTrue(result["success"])
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        self.assertEqual(call_args[0][0], self.api.base_url)
+
+        headers = call_args[1]["headers"]
+        self.assertEqual(headers["appId"], self.api.app_id)
+        self.assertIn("sign", headers)
+        self.assertIn("timestamp", headers)
+        self.assertIn("nonce", headers)
+
+        params = call_args[1]["params"]
+        self.assertEqual(params["client"], self.api.app_id)
+        self.assertEqual(params["startDay"], "2026-04-16")
+        self.assertEqual(params["endDay"], "2026-04-16")
+        self.assertEqual(params["zbxxs"], "101-0003,101-0004")
+
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
+    def test_get_metrics_value_success_custom_zbxxs(self, mock_get):
+        mock_response = Mock()
+        mock_response.json.return_value = {"success": True, "result": []}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        custom_zbxxs = "101-0001,101-0002"
+        self.api.get_metrics_value("2026-04-16", "2026-04-16", custom_zbxxs)
+
+        params = mock_get.call_args[1]["params"]
+        self.assertEqual(params["zbxxs"], custom_zbxxs)
+
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
+    def test_get_metrics_value_http_error_returns_failure(self, mock_get):
+        mock_response = Mock()
+        mock_response.text = "forbidden"
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("403 Forbidden")
+        mock_get.return_value = mock_response
+
+        result = self.api.get_metrics_value("2026-04-16", "2026-04-16")
+        self.assertFalse(result["success"])
+        self.assertIn("message", result)
+
+    @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
+    def test_get_metrics_value_request_error_returns_failure(self, mock_get):
+        mock_get.side_effect = requests.exceptions.RequestException("connection failed")
+
+        result = self.api.get_metrics_value("2026-04-16", "2026-04-16")
+        self.assertFalse(result["success"])
+        self.assertIn("message", result)
+
+    def test_get_metrics_value_real_request(self):
+        """Test a real API call through MetricsAPI.get_metrics_value."""
+        import json
+
+        start_date = "2026-04-10"
+        end_date = "2026-04-10"
+        zbxxs_val = "101-0001,101-0002"
+
+        print(f"\nSending real MetricsAPI request to {self.api.base_url}...")
+        result = self.api.get_metrics_value(start_date, end_date, zbxxs_val)
+
+        self.assertTrue(isinstance(result, dict))
+        if result.get("success"):
+            self.assertIn("result", result)
+            data = result["result"]
+
+            # Real endpoint payload can vary by tenant/data availability.
+            # Accept list, dict, or None as long as response is well-formed.
+            if isinstance(data, dict):
+                maybe_list = data.get("list", data.get("rows", None))
+                if maybe_list is not None:
+                    self.assertIsInstance(maybe_list, list)
+            elif data is not None:
+                self.assertIsInstance(data, list)
+            print("\n--- MetricsAPI Real Response ---")
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"MetricsAPI real request failed (possible whitelist/key issue): {result}")
+    
+    
 
 
 if __name__ == "__main__":

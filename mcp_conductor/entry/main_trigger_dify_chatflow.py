@@ -224,28 +224,52 @@ def run(
             )
             answer = resp.get("answer") or ""
             message_id = resp.get("message_id", "")
-            return_id = f"dify-{message_id}" if message_id else None
+            date_id = int(d.strftime("%Y%m%d"))
+            return_id = f"dify-{message_id}" if message_id else f"dify-{pipe}-{date_id}"
             answer_preview = answer[:120].replace("\n", " ")
             logger.info(
                 "[%d/%d] OK message_id=%s answer=%s...",
                 i, total, message_id, answer_preview,
             )
-            # Write answer into log_agent_worklog if the row exists but has no content
-            if return_id and answer:
+            # Upsert final answer into log_agent_worklog so content is always the latest.
+            if answer:
                 with sqlite3.connect(str(DB_PATH)) as conn:
                     conn.execute(
-                        """UPDATE log_agent_worklog
-                           SET content = ?
-                           WHERE return_id = ? AND (content IS NULL OR content = '')""",
-                        (answer, return_id),
+                        """INSERT INTO log_agent_worklog
+                               (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
+                           VALUES (?, ?, '', ?, ?, ?, ?, '')
+                           ON CONFLICT(pipe_name, date_id) DO UPDATE SET
+                               content = excluded.content,
+                               return_id = excluded.return_id,
+                               run_timestamp = datetime('now'),
+                               payload = CASE
+                                   WHEN log_agent_worklog.payload IS NULL OR log_agent_worklog.payload = ''
+                                       THEN excluded.payload
+                                   ELSE log_agent_worklog.payload
+                               END,
+                               question_type = CASE
+                                   WHEN log_agent_worklog.question_type IS NULL OR log_agent_worklog.question_type = ''
+                                       THEN excluded.question_type
+                                   ELSE log_agent_worklog.question_type
+                               END,
+                               pipe_name = COALESCE(log_agent_worklog.pipe_name, excluded.pipe_name),
+                               date_id = COALESCE(log_agent_worklog.date_id, excluded.date_id)""",
+                        (return_id, "dify_answer", query, date_id, pipe, answer),
                     )
                     updated = conn.execute(
                         "SELECT changes()"
                     ).fetchone()[0]
                 if updated:
-                    logger.info("[%d/%d] Saved content to DB for return_id=%s", i, total, return_id)
+                    logger.info(
+                        "[%d/%d] Upserted content to DB for pipe=%s date_id=%s return_id=%s",
+                        i,
+                        total,
+                        pipe,
+                        date_id,
+                        return_id,
+                    )
                 else:
-                    logger.debug("[%d/%d] No DB row updated for return_id=%s (row may already have content or not exist)", i, total, return_id)
+                    logger.debug("[%d/%d] No DB row changed for pipe=%s date_id=%s", i, total, pipe, date_id)
             succeeded += 1
         except requests.exceptions.RequestException as e:
             failed += 1
