@@ -34,6 +34,23 @@ function nl2br(text: string) {
   ));
 }
 
+function pickWorkflowOutputText(outputs: unknown): string {
+  if (!outputs || typeof outputs !== "object") return "";
+  const obj = outputs as Record<string, unknown>;
+
+  const preferredKeys = ["answer", "formatted_output", "reason", "text", "output"];
+  for (const key of preferredKeys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+
+  for (const value of Object.values(obj)) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+
+  return "";
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function TypingIndicator() {
@@ -205,11 +222,38 @@ export default function ChatbotPage() {
               }
 
               // Accumulate streamed answer chunks
-              if (json.event === "message" && json.answer) {
+              if ((json.event === "message" || json.event === "agent_message") && json.answer) {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
                       ? { ...m, content: m.content + json.answer }
+                      : m
+                  )
+                );
+              }
+
+              if (json.event === "workflow_finished") {
+                const workflowText = pickWorkflowOutputText(json.data?.outputs);
+                if (workflowText) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantId
+                        ? { ...m, content: m.content || workflowText }
+                        : m
+                    )
+                  );
+                }
+              }
+
+              if (json.event === "error") {
+                const errorMessage =
+                  typeof json.message === "string" && json.message.trim()
+                    ? json.message
+                    : "请求失败，请检查模型配置或余额。";
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, content: `⚠️ ${errorMessage}`, streaming: false }
                       : m
                   )
                 );
