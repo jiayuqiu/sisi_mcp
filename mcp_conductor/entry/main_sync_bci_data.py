@@ -19,11 +19,11 @@ DB_PATH = Path("./data/sisi.sqlite")
 STATUS_PATH = Path("./data/sync_status.json")
 
 
-LOG_PATH = Path("./tmp/sync_history.jsonl")
+LOG_PATH = Path("./tmp/sync_history.json")
 
 
 def write_status(status: str, **kwargs):
-    """Write sync status to data/sync_status.json and append to tmp/sync_history.jsonl."""
+    """Write sync status to data/sync_status.json and append to tmp/sync_history.json."""
     import json
     payload = {
         "status": status,
@@ -50,27 +50,57 @@ def get_last_synced_date() -> str | None:
         conn.close()
 
 
-def sync_bci_data(start_date: str, end_date: str):
-    """Fetch metrics from BCI API and save to local SQLite."""
+def sync_bci_data(start_date: str, end_date: str) -> dict:
+    """Fetch metrics from BCI API and save to local SQLite.
+
+    Returns:
+        dict: {
+            "success": bool,
+            "inserted_count": int,
+            "reason": str | None,
+        }
+    """
     write_status("running", start_date=start_date, end_date=end_date)
 
     api = MetricsAPI()
-    logger.info("Fetching BCI metrics from %s to %s...", start_date, end_date)
+    zbxxs_groups = [
+        "101-0003,101-0004",  # strait data
+        "101-0001,101-0002",  # port data
+    ]
 
-    response = api.get_metrics_value(start_date, end_date)
+    data = []
+    api_failures = []
+    for zbxxs_val in zbxxs_groups:
+        logger.info(
+            "Fetching BCI metrics from %s to %s (zbxxs=%s)...",
+            start_date,
+            end_date,
+            zbxxs_val,
+        )
+        response = api.get_metrics_value(start_date, end_date, zbxxs_val=zbxxs_val)
 
-    if not response or not response.get("success"):
-        msg = f"API request failed: {response}"
-        logger.error(msg)
+        if not response or not response.get("success"):
+            api_failures.append({"zbxxs": zbxxs_val, "response": response})
+            logger.error("API request failed for zbxxs=%s: %s", zbxxs_val, response)
+            continue
+
+        result = response.get("result", [])
+        if not result:
+            logger.warning("No data for zbxxs=%s: %s", zbxxs_val, response)
+            continue
+
+        data.extend(result)
+
+    if api_failures and not data:
+        msg = f"All API requests failed: {api_failures}"
         write_status("failed", start_date=start_date, end_date=end_date, error=msg)
-        return
+        return {"success": False, "inserted_count": 0, "reason": "api_failed"}
 
-    data = response.get("result", [])
     if not data:
-        msg = f"No data in API response: {response}"
+        msg = "No data in API response for both zbxxs groups"
         logger.warning(msg)
         write_status("failed", start_date=start_date, end_date=end_date, error=msg)
-        return
+        return {"success": False, "inserted_count": 0, "reason": "empty_result"}
 
     # Connect to DB
     conn = sqlite3.connect(str(DB_PATH.absolute()))
@@ -93,24 +123,33 @@ def sync_bci_data(start_date: str, end_date: str):
             # Convert YYYY-MM-DD -> YYYYMMDD
             date_id = int(str(record_date).replace("-", ""))
 
+            try:
+                ship_cnt = int(float(value))
+            except (TypeError, ValueError):
+                logger.debug("Skipping item with invalid numeric zbsj: %s", item)
+                continue
+
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO ship_cnt_in_pipe (pipe_name, date_id, ship_cnt, detection_flag)
                 VALUES (?, ?, ?, NULL)
                 """,
-                (pipe_name, date_id, int(value))
+                (pipe_name, date_id, ship_cnt)
             )
             inserted_count += cursor.rowcount
 
         conn.commit()
         logger.info("Successfully synced %d records into ship_cnt_in_pipe.", inserted_count)
         write_status("success", start_date=start_date, end_date=end_date, inserted_count=inserted_count)
+        return {"success": True, "inserted_count": inserted_count, "reason": None}
     except Exception as e:
         logger.error("Error parsing/inserting data: %s", e)
         conn.rollback()
         write_status("failed", start_date=start_date, end_date=end_date, error=str(e))
+        return {"success": False, "inserted_count": 0, "reason": "db_error"}
     finally:
         conn.close()
+
 
 if __name__ == "__main__":
     setup_schema()

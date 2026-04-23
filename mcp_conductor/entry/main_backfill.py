@@ -21,7 +21,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 
-def backfill(start_date: str, end_date: str, dry_run: bool = False, sleep: int = 2):
+def backfill(
+    start_date: str,
+    end_date: str,
+    dry_run: bool = False,
+    sleep: int = 2,
+    require_sync_data: bool = False,
+):
     """Run the full backfill pipeline for each date in the range."""
     current = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
@@ -31,9 +37,16 @@ def backfill(start_date: str, end_date: str, dry_run: bool = False, sleep: int =
         logger.info(f"=== Processing {day} ===")
 
         logger.info(f">>> Syncing BCI data for {day}")
+        sync_result = {"success": True, "inserted_count": 0, "reason": None}
         if not dry_run:
             from mcp_conductor.entry.main_sync_bci_data import sync_bci_data
-            sync_bci_data(day, day)
+            sync_result = sync_bci_data(day, day)
+
+        if require_sync_data and not sync_result.get("success", False):
+            raise RuntimeError(
+                f"Sync step failed for {day} (reason={sync_result.get('reason')}). "
+                "Stop due to --require-sync-data."
+            )
 
         logger.info(f">>> Running traffic detection for {day}")
         if not dry_run:
@@ -66,6 +79,17 @@ if __name__ == "__main__":
     parser.add_argument("--end-date", type=str, required=True, help="End date (YYYY-MM-DD)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without executing")
     parser.add_argument("--sleep", type=int, default=2, help="Sleep seconds between Dify calls")
+    parser.add_argument(
+        "--require-sync-data",
+        action="store_true",
+        help="Fail fast if daily sync returns no data or API failure.",
+    )
     args = parser.parse_args()
 
-    backfill(args.start_date, args.end_date, dry_run=args.dry_run, sleep=args.sleep)
+    backfill(
+        args.start_date,
+        args.end_date,
+        dry_run=args.dry_run,
+        sleep=args.sleep,
+        require_sync_data=args.require_sync_data,
+    )
