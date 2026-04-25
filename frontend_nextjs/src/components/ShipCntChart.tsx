@@ -26,6 +26,7 @@ interface ShipCntResponse {
   pipes: string[];
   min_date: string | null;
   max_date: string | null;
+  selected_name?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -151,9 +152,19 @@ function DateInput({
 
 interface ShipCntChartProps {
   onFilterChange?: (pipe: string, start: string, end: string) => void;
+  dimension?: "pipe" | "port";
+  preferredName?: string;
+  title?: string;
+  subtitle?: string;
 }
 
-export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {}) {
+export default function ShipCntChart({
+  onFilterChange,
+  dimension = "pipe",
+  preferredName = "曼德海峡",
+  title = "通航船数量",
+  subtitle = "Ship count in channel",
+}: ShipCntChartProps = {}) {
   const [pipes, setPipes] = useState<string[]>([]);
   const [selectedPipe, setSelectedPipe] = useState<string>("");
 
@@ -181,6 +192,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
       setError(null);
       try {
         const params = new URLSearchParams({
+          dimension,
           pipe_name: pipe,
           start_date: start,
           end_date: end,
@@ -196,7 +208,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
         setLoading(false);
       }
     },
-    [pipes.length],
+    [dimension, pipes.length],
   );
 
   // ── Initial load ───────────────────────────────────────────────────────────
@@ -206,12 +218,18 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
       setLoading(true);
       try {
         const res = await fetch(
-          `/api/ship-cnt?pipe_name=${encodeURIComponent("曼德海峡")}`,
+          `/api/ship-cnt?dimension=${encodeURIComponent(dimension)}&preferred_name=${encodeURIComponent(preferredName)}`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json: ShipCntResponse = await res.json();
+        if (!json.selected_name) {
+          setPipes([]);
+          setSelectedPipe("");
+          setData([]);
+          return;
+        }
         setPipes(json.pipes);
-        setSelectedPipe("曼德海峡");
+        setSelectedPipe(json.selected_name);
         const mn = json.min_date ?? "2022-01-01";
         const mx = json.max_date ?? new Date().toISOString().slice(0, 10);
         const defaultStart = (() => {
@@ -232,7 +250,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
       }
     };
     init();
-  }, []);
+  }, [dimension, preferredName]);
 
   // ── Refetch when pipe changes ──────────────────────────────────────────────
 
@@ -247,7 +265,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
       setError(null);
       try {
         const res = await fetch(
-          `/api/ship-cnt?pipe_name=${encodeURIComponent(selectedPipe)}`,
+          `/api/ship-cnt?dimension=${encodeURIComponent(dimension)}&pipe_name=${encodeURIComponent(selectedPipe)}`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json: ShipCntResponse = await res.json();
@@ -276,7 +294,7 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
     };
     refetchForPipe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPipe]);
+  }, [dimension, selectedPipe]);
 
   // ── Refetch when date range changes ───────────────────────────────────────
 
@@ -355,8 +373,8 @@ export default function ShipCntChart({ onFilterChange }: ShipCntChartProps = {})
             <Ship className="w-4 h-4 text-teal-400" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-white">通航船数量</h2>
-            <p className="text-xs text-slate-500">Ship count in channel</p>
+            <h2 className="text-sm font-semibold text-white">{title}</h2>
+            <p className="text-xs text-slate-500">{subtitle}</p>
           </div>
         </div>
 

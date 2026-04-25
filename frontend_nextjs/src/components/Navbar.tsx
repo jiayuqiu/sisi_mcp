@@ -7,6 +7,7 @@ import { clsx } from "clsx";
 
 const navLinks = [
   { href: "/workflow", label: "海峡通道专员", icon: BarChart2 },
+  { href: "/workflow-port", label: "港口监测专员", icon: BarChart2 },
 ];
 
 export default function Navbar() {
@@ -30,7 +31,7 @@ export default function Navbar() {
       {/* Nav links */}
       <nav className="flex items-center gap-1">
         {navLinks.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={href}

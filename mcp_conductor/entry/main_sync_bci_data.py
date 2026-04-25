@@ -64,13 +64,21 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
 
     api = MetricsAPI()
     zbxxs_groups = [
-        "101-0003,101-0004",  # strait data
-        "101-0001,101-0002",  # port data
+        {
+            "zbxxs": "101-0003,101-0004",  # strait data
+            "target_table": "ship_cnt_in_pipe",
+        },
+        {
+            "zbxxs": "101-0001,101-0002",  # port data
+            "target_table": "ship_cnt_in_port",
+        },
     ]
 
-    data = []
+    tagged_data = []
     api_failures = []
-    for zbxxs_val in zbxxs_groups:
+    for group in zbxxs_groups:
+        zbxxs_val = group["zbxxs"]
+        target_table = group["target_table"]
         logger.info(
             "Fetching BCI metrics from %s to %s (zbxxs=%s)...",
             start_date,
@@ -80,7 +88,13 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
         response = api.get_metrics_value(start_date, end_date, zbxxs_val=zbxxs_val)
 
         if not response or not response.get("success"):
-            api_failures.append({"zbxxs": zbxxs_val, "response": response})
+            api_failures.append(
+                {
+                    "zbxxs": zbxxs_val,
+                    "target_table": target_table,
+                    "response": response,
+                }
+            )
             logger.error("API request failed for zbxxs=%s: %s", zbxxs_val, response)
             continue
 
@@ -89,14 +103,14 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
             logger.warning("No data for zbxxs=%s: %s", zbxxs_val, response)
             continue
 
-        data.extend(result)
+        tagged_data.extend((item, target_table) for item in result)
 
-    if api_failures and not data:
+    if api_failures and not tagged_data:
         msg = f"All API requests failed: {api_failures}"
         write_status("failed", start_date=start_date, end_date=end_date, error=msg)
         return {"success": False, "inserted_count": 0, "reason": "api_failed"}
 
-    if not data:
+    if not tagged_data:
         msg = "No data in API response for both zbxxs groups"
         logger.warning(msg)
         write_status("failed", start_date=start_date, end_date=end_date, error=msg)
@@ -106,17 +120,19 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
     conn = sqlite3.connect(str(DB_PATH.absolute()))
     cursor = conn.cursor()
     inserted_count = 0
+    inserted_pipe_count = 0
+    inserted_port_count = 0
 
     try:
-        for item in data:
+        for item, target_table in tagged_data:
             if not isinstance(item, dict):
                 continue
 
             record_date = item.get("zbrq")       # YYYY-MM-DD
-            pipe_name = item.get("xftj1Value")   # e.g. '马六甲海峡'
+            location_name = item.get("xftj1Value")
             value = item.get("zbsj")             # ship count
 
-            if not record_date or not pipe_name or value is None:
+            if not record_date or not location_name or value is None:
                 logger.debug("Skipping item with missing fields: %s", item)
                 continue
 
@@ -129,17 +145,36 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
                 logger.debug("Skipping item with invalid numeric zbsj: %s", item)
                 continue
 
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO ship_cnt_in_pipe (pipe_name, date_id, ship_cnt, detection_flag)
-                VALUES (?, ?, ?, NULL)
-                """,
-                (pipe_name, date_id, ship_cnt)
-            )
-            inserted_count += cursor.rowcount
+            if target_table == "ship_cnt_in_pipe":
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO ship_cnt_in_pipe (pipe_name, date_id, ship_cnt, detection_flag)
+                    VALUES (?, ?, ?, NULL)
+                    """,
+                    (location_name, date_id, ship_cnt)
+                )
+                inserted_pipe_count += cursor.rowcount
+            elif target_table == "ship_cnt_in_port":
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO ship_cnt_in_port (port_name, date_id, ship_cnt, detection_flag)
+                    VALUES (?, ?, ?, NULL)
+                    """,
+                    (location_name, date_id, ship_cnt)
+                )
+                inserted_port_count += cursor.rowcount
+            else:
+                logger.warning("Unknown target table %s. Skipping item: %s", target_table, item)
+
+        inserted_count = inserted_pipe_count + inserted_port_count
 
         conn.commit()
-        logger.info("Successfully synced %d records into ship_cnt_in_pipe.", inserted_count)
+        logger.info(
+            "Successfully synced %d records (pipe=%d, port=%d).",
+            inserted_count,
+            inserted_pipe_count,
+            inserted_port_count,
+        )
         write_status("success", start_date=start_date, end_date=end_date, inserted_count=inserted_count)
         return {"success": True, "inserted_count": inserted_count, "reason": None}
     except Exception as e:
