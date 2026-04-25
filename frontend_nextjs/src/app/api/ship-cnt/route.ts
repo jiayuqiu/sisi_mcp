@@ -12,6 +12,12 @@ interface ShipCntRow {
   anomaly_flag: number | null;
 }
 
+type Dimension = "pipe" | "port";
+
+function resolveDimension(raw: string | null): Dimension {
+  return raw === "port" ? "port" : "pipe";
+}
+
 function toDateId(dateStr: string): number {
   // dateStr is YYYY-MM-DD
   return parseInt(dateStr.replace(/-/g, ""), 10);
@@ -25,19 +31,18 @@ function daysAgoDateId(days: number): number {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const pipe_name = searchParams.get("pipe_name");
+  const dimension = resolveDimension(searchParams.get("dimension"));
+  const requestedName = searchParams.get("pipe_name");
+  const preferredName = searchParams.get("preferred_name") ?? "";
   const start_date = searchParams.get("start_date"); // YYYY-MM-DD
   const end_date = searchParams.get("end_date"); // YYYY-MM-DD
   const days = searchParams.get("days"); // fallback if no start/end
 
-  if (!pipe_name) {
-    return NextResponse.json(
-      { error: "pipe_name is required" },
-      { status: 400 },
-    );
-  }
+  const sourceTable =
+    dimension === "port" ? "ship_cnt_in_port" : "ship_cnt_in_pipe";
+  const sourceNameColumn = dimension === "port" ? "port_name" : "pipe_name";
 
-  if (pipe_name.startsWith("test_")) {
+  if (requestedName?.startsWith("test_")) {
     return NextResponse.json(
       { error: "pipe_name is not available" },
       { status: 404 },
@@ -63,33 +68,58 @@ export async function GET(req: NextRequest) {
   try {
     const db = new Database(DB_PATH, { readonly: true });
 
-    const rows = db
-      .prepare(
-        `SELECT s.date_id, s.ship_cnt, a.anomaly_flag
-         FROM ship_cnt_in_pipe s
-         LEFT JOIN m_pipe_anomaly_roll_percentile a
-           ON a.pipe_name = s.pipe_name AND a.date_id = s.date_id
-         WHERE s.pipe_name = ? AND s.date_id >= ? AND s.date_id <= ?
-         ORDER BY s.date_id ASC`,
-      )
-      .all(pipe_name, startId, endId) as ShipCntRow[];
-
-    // Also fetch all distinct pipe names for the selector
-    const pipes = (
+    const names = (
       db
         .prepare(
-          "SELECT DISTINCT pipe_name FROM ship_cnt_in_pipe WHERE pipe_name NOT LIKE 'test\\_%' ESCAPE '\\' ORDER BY pipe_name",
+          `SELECT DISTINCT ${sourceNameColumn} AS name
+           FROM ${sourceTable}
+           WHERE ${sourceNameColumn} NOT LIKE 'test\\_%' ESCAPE '\\'
+           ORDER BY ${sourceNameColumn}`,
         )
-        .all() as { pipe_name: string }[]
-    ).map((r) => r.pipe_name);
+        .all() as { name: string }[]
+    ).map((r) => r.name);
+
+    const name = requestedName || (names.includes(preferredName) ? preferredName : names[0]);
+
+    if (!name) {
+      db.close();
+      return NextResponse.json({
+        data: [],
+        pipes: [],
+        min_date: null,
+        max_date: null,
+        selected_name: null,
+      });
+    }
+
+    const rows =
+      dimension === "port"
+        ? (db
+            .prepare(
+              `SELECT s.date_id, s.ship_cnt, NULL AS anomaly_flag
+               FROM ${sourceTable} s
+               WHERE s.${sourceNameColumn} = ? AND s.date_id >= ? AND s.date_id <= ?
+               ORDER BY s.date_id ASC`,
+            )
+            .all(name, startId, endId) as ShipCntRow[])
+        : (db
+            .prepare(
+              `SELECT s.date_id, s.ship_cnt, a.anomaly_flag
+               FROM ${sourceTable} s
+               LEFT JOIN m_pipe_anomaly_roll_percentile a
+                 ON a.pipe_name = s.${sourceNameColumn} AND a.date_id = s.date_id
+               WHERE s.${sourceNameColumn} = ? AND s.date_id >= ? AND s.date_id <= ?
+               ORDER BY s.date_id ASC`,
+            )
+            .all(name, startId, endId) as ShipCntRow[]);
 
     // Fetch overall min/max date_id for this pipe (for date picker bounds)
     const bounds = db
       .prepare(
         `SELECT MIN(date_id) AS min_date_id, MAX(date_id) AS max_date_id
-         FROM ship_cnt_in_pipe WHERE pipe_name = ?`,
+         FROM ${sourceTable} WHERE ${sourceNameColumn} = ?`,
       )
-      .get(pipe_name) as { min_date_id: number; max_date_id: number };
+      .get(name) as { min_date_id: number; max_date_id: number };
 
     db.close();
 
@@ -112,9 +142,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       data,
-      pipes,
+      pipes: names,
       min_date: bounds?.min_date_id ? toIso(bounds.min_date_id) : null,
       max_date: bounds?.max_date_id ? toIso(bounds.max_date_id) : null,
+      selected_name: name,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
