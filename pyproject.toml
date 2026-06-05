@@ -25,6 +25,7 @@ dependencies = [
     "uvicorn",
     "jinja2",
     "pandas-stubs~=2.3.3",
+    "prefect>=3.0",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -22,3 +22,6 @@ requests
 
 # Testing
 pytest
+
+# Workflow orchestration
+prefect>=3.0

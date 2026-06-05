@@ -61,7 +61,7 @@ class RollingPercentileDetector(BaseDetector):
         """
         # init return value
         return_dict = {}
-
+        
         # derive p10 / p90 bounds from the entire historical record
         quantile_10 = np.percentile(value["ship_cnt"], 10)
         quantile_25 = np.percentile(value["ship_cnt"], 25)
@@ -93,15 +93,27 @@ class RollingPercentileDetector(BaseDetector):
         # isolate the most recent `interval_days` rows
         recent = value.sort_values(by=["date_id"], ascending=False).head(interval_days)
 
-        # count days whose ship_cnt falls outside [p10, p90]
-        anomaly_cnt = 0
-        for idx, row in recent.iterrows():
-            if (row["ship_cnt"] < quantile_25) or (row["ship_cnt"] > quantile_75):
-                anomaly_cnt += 1
+        latest_row = recent.iloc[0]
+        latest_ship_cnt = latest_row["ship_cnt"]
 
-        # flag as anomalous when the outlier ratio exceeds the threshold
-        anomaly_ratio = anomaly_cnt / interval_days
-        anomaly_flag = FLAG.ANOMALY if anomaly_ratio > self.anomaly_percentage_threshold else FLAG.NORMAL
+        if latest_ship_cnt == 0:
+            # When the most recent day has 0 ships, it is always anomalous
+            # regardless of percentile bounds.  anomaly_ratio = -1 is a sentinel
+            # value meaning "latest day is 0" (distinct from a computed ratio).
+            anomaly_flag = FLAG.ANOMALY
+            anomaly_ratio = -1.0
+        else:
+            # latest ship cnt != 0
+            # count days whose ship_cnt falls outside [p10, p90]
+            anomaly_cnt = 0
+            for _, row in recent.iterrows():
+                if (row["ship_cnt"] < quantile_25) or (row["ship_cnt"] > quantile_75):
+                    anomaly_cnt += 1
+
+            # flag as anomalous when the outlier ratio exceeds the threshold
+            anomaly_ratio = anomaly_cnt / interval_days
+            anomaly_flag = FLAG.ANOMALY if anomaly_ratio > self.anomaly_percentage_threshold else FLAG.NORMAL
+        
         return_dict["anomaly_ratio"] = anomaly_ratio
         return_dict["anomaly_flag"] = anomaly_flag
         return return_dict

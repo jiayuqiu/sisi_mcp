@@ -45,19 +45,19 @@ services:
       - default
       - dify_platform
 
-  bci_sync:
+  sisi_pipeline:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.sync
-    container_name: sisimcp-bci-sync
+      dockerfile: docker/Dockerfile.pipeline
+    container_name: sisimcp-pipeline
     env_file: ../.env
     environment:
-      - BCI_SYNC_START_DATE=${BCI_SYNC_START_DATE:-2026-01-01}
       - TZ=Asia/Shanghai
       - UV_CACHE_DIR=/app/.cache/uv
+      - MPLCONFIGDIR=/app/.cache/matplotlib
     volumes:
       - ../data:/app/data
-      - ../tmp:/var/log
+      - ../tmp:/app/tmp
     restart: unless-stopped
     networks:
       - default
