@@ -110,6 +110,8 @@ async def other_mcp_server(request: str) -> str:
         "Placeholder: external MCP server routing is not implemented yet.\n"
         f"request={request}"
     )
+
+
 if __name__ == "__main__":
         """Run the MCP server over HTTP.
 
