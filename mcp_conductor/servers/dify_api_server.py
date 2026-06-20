@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 # Import the actual tool functions
 from mcp_conductor.entry.main_traffic_detect import analyze_congestion
-from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
+# from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 from mcp_conductor.resources.utils.db import save_worklog_entry
 
 logger = logging.getLogger("dify_api")
@@ -366,45 +366,45 @@ async def save_worklog(request: SaverRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/plot_analysis")
-async def plot_analysis(request: PlotRequest):
-    """Generate ship congestion plot"""
-    try:
-        logger.info(f"Plot analysis request: {request.run_date}, {request.pipe_name}")
+# @app.post("/api/plot_analysis")
+# async def plot_analysis(request: PlotRequest):
+#     """Generate ship congestion plot"""
+#     try:
+#         logger.info(f"Plot analysis request: {request.run_date}, {request.pipe_name}")
 
-        # Generate plot in executor
-        output_dir = "./tmp/images"
-        loop = asyncio.get_event_loop()
-        image_path = await loop.run_in_executor(
-            None,
-            plot_ship_congestion,
-            request.run_date,
-            request.pipe_name,
-            3,  # month default
-            0,  # day default
-            output_dir
-        )
+#         # Generate plot in executor
+#         output_dir = "./tmp/images"
+#         loop = asyncio.get_event_loop()
+#         image_path = await loop.run_in_executor(
+#             None,
+#             plot_ship_congestion,
+#             request.run_date,
+#             request.pipe_name,
+#             3,  # month default
+#             0,  # day default
+#             output_dir
+#         )
 
-        result_text = f"""🖼️ 船舶异常分析图
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 分析结束日期: {request.run_date}
-🌊 通道: {request.pipe_name}
-📁 图片路径: {image_path}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
+#         result_text = f"""🖼️ 船舶异常分析图
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📅 分析结束日期: {request.run_date}
+# 🌊 通道: {request.pipe_name}
+# 📁 图片路径: {image_path}
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# """
 
-        logger.info(f"Plot generated: {image_path}")
-        return {
-            "success": True,
-            "result": result_text,
-            "image_path": image_path,
-            "run_date": request.run_date,
-            "pipe_name": request.pipe_name
-        }
+#         logger.info(f"Plot generated: {image_path}")
+#         return {
+#             "success": True,
+#             "result": result_text,
+#             "image_path": image_path,
+#             "run_date": request.run_date,
+#             "pipe_name": request.pipe_name
+#         }
 
-    except Exception as e:
-        logger.error(f"Error in plot_analysis: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         logger.error(f"Error in plot_analysis: {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")

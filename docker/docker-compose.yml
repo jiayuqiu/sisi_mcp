@@ -45,22 +45,22 @@ services:
       - default
       - dify_platform
 
-  sisi_pipeline:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.pipeline
-    container_name: sisimcp-pipeline
-    env_file: ../.env
-    environment:
-      - TZ=Asia/Shanghai
-      - UV_CACHE_DIR=/app/.cache/uv
-      - MPLCONFIGDIR=/app/.cache/matplotlib
-    volumes:
-      - ../data:/app/data
-      - ../tmp:/app/tmp
-    restart: unless-stopped
-    networks:
-      - default
+  # sisi_pipeline:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile.pipeline
+  #   container_name: sisimcp-pipeline
+  #   env_file: ../.env
+  #   environment:
+  #     - TZ=Asia/Shanghai
+  #     - UV_CACHE_DIR=/app/.cache/uv
+  #     - MPLCONFIGDIR=/app/.cache/matplotlib
+  #   volumes:
+  #     - ../data:/app/data
+  #     - ../tmp:/app/tmp
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
 
   frontend_nextjs:
     build:

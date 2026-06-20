@@ -46,6 +46,9 @@ def _init_test_db(db_path: Path) -> None:
 
 
 class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
+    LIVE_DIFY_API_KEY_ENV = "TEST_DIFY_CHATFLOW_API_KEY"
+    LIVE_DIFY_BASE_URL_ENV = "TEST_DIFY_CHATFLOW_URL"
+
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmpdir.name) / "test.sqlite"
@@ -158,3 +161,17 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
         assert question_type == "weather_news"
         assert payload == "existing-payload"
         assert content == "new long final answer"
+
+    @unittest.skip("skip. only trigger in developing.")
+    def test_call_dify_chatflow(self):
+        result = trigger.call_dify_chatflow(
+            query="请分析2026年4月15日霍尔木兹海峡为什么会发生交通异常",
+            api_key=os.environ[self.LIVE_DIFY_API_KEY_ENV],
+            base_url=os.environ[self.LIVE_DIFY_BASE_URL_ENV],
+            user="test-user",
+            timeout=30.0,
+        )
+
+        assert isinstance(result, dict)
+        assert result.get("message_id")
+        assert isinstance(result.get("answer"), str)

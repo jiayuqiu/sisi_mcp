@@ -24,4 +24,5 @@ requests
 pytest
 
 # Workflow orchestration
+griffe<1
 prefect>=3.0
