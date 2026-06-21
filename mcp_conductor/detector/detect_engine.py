@@ -10,6 +10,10 @@ from mcp_conductor.resources.utils.sisi_dataclasses import ROLLING_PERCENTILE_FL
 logger = logging.getLogger(__name__)
 
 
+PIPE_TABLE = "ship_cnt_in_pipe"
+PORT_TABLE = "ship_cnt_in_port"
+
+
 def get_pipe_ship_cnt(pipe_name: str, start_date_id: int, end_date_id: int, engine) -> pd.DataFrame:
     """
     Query all ship count records for a single strait from ship_cnt_in_pipe.
@@ -38,6 +42,26 @@ def get_pipe_ship_cnt(pipe_name: str, start_date_id: int, end_date_id: int, engi
 
     if df.shape[0] == 0:
         logger.warning(f"From {start_date_id} to {end_date_id}, {pipe_name} there is no pipe ship cnt data.")
+
+    return df
+
+
+def get_port_ship_cnt(port_name: str, start_date_id: int, end_date_id: int, engine) -> pd.DataFrame:
+    get_port_cnt_sql = f"""
+        SELECT
+            *
+        FROM
+            ship_cnt_in_port
+        WHERE
+            port_name = '{port_name}'
+            and date_id >= {start_date_id} and date_id <= {end_date_id}
+    """
+    df = pd.read_sql(
+        get_port_cnt_sql, con=engine
+    )
+
+    if df.shape[0] == 0:
+        logger.warning(f"From {start_date_id} to {end_date_id}, {port_name} there is no port ship cnt data.")
 
     return df
 
@@ -71,10 +95,40 @@ def get_pipe_name_list(engine) -> list[str]:
     return df.pipe_name.tolist()
 
 
-def single_pipe_detect(signals: pd.DataFrame,
-                       pipe_name: str,
-                       run_date_id: int,
-                       detector: RollingPercentileDetector) -> dict:
+def get_port_name_list(engine) -> list[str]:
+    """
+    Return all distinct strait names present in ship_cnt_in_port.
+
+    Args:
+        engine: SQLAlchemy engine.
+
+    Returns:
+        List of port_name strings.
+
+    Raises:
+        ValueError: if the table contains no rows.
+    """
+    sql = f"""
+        SELECT DISTINCT 
+            port_name 
+        FROM 
+            ship_cnt_in_port
+        WHERE
+            port_name NOT LIKE 'test_%';
+    """
+    df = pd.read_sql(sql, con=engine)
+    # logger.info("SQL: %s", sql)
+    if df.shape[0] == 0:
+        raise ValueError(f"There is no port ship cnt data from {engine}.")
+
+    return df.port_name.tolist()
+
+
+def single_detect(signals: pd.DataFrame,
+                  location_col_name: str,
+                  name_str: str,
+                  run_date_id: int,
+                  detector: RollingPercentileDetector) -> dict:
     """
     Run rolling-percentile detection on a single strait's historical data.
 
@@ -92,7 +146,7 @@ def single_pipe_detect(signals: pd.DataFrame,
             {
                 "pipe_name"     : str,
                 "run_date_id"   : int,    # YYYYMMDD
-                "anomaly_flag"  : int,    # FLAG value (0–4)
+                "anomaly_flag"  : int,    # FLAG value (0-4)
                 "quantile_10"   : float,  # 10th-percentile ship count
                 "quantile_25"   : float,  # 25th-percentile ship count
                 "quantile_75"   : float,  # 75th-percentile ship count
@@ -101,7 +155,7 @@ def single_pipe_detect(signals: pd.DataFrame,
             }
     """
     if signals.empty:
-        logger.warning("No data for pipe_name=%s, skipping.", pipe_name)
+        logger.warning("No data for pipe_name=%s, skipping.", name_str)
         anomaly_detection = {
             "anomaly_flag": FLAG.NO_DATA,
             "quantile_10": None,
@@ -112,9 +166,12 @@ def single_pipe_detect(signals: pd.DataFrame,
         }
     else:
         # feed the ship cnt into detector, will get changepoints as expected.
-        anomaly_detection = detector.detect(value=signals, pipe_name=pipe_name, run_date_id=run_date_id)
+        anomaly_detection = detector.detect(value=signals, 
+                                            location_col_name=location_col_name,
+                                            name_str=name_str, 
+                                            run_date_id=run_date_id)
     detection_result = {
-        "pipe_name": pipe_name,
+        location_col_name: name_str,
         "run_date_id": run_date_id,
         "anomaly_flag": anomaly_detection["anomaly_flag"],
         "quantile_10": anomaly_detection.get("quantile_10"),
@@ -126,7 +183,39 @@ def single_pipe_detect(signals: pd.DataFrame,
     return detection_result
 
 
-def pipe_rp_detect_engine(run_date: str, pipe_name: str | None = None) -> list[dict[str, Any]]:
+def run_detect(app_type: str,
+               app_detect_config: dict, 
+               run_date_id: int, 
+               start_date_id: int,
+               detector: RollingPercentileDetector,
+               engine) -> list:
+    # run detect
+    detection_result_list = []
+    for _name in app_detect_config["name_list"]:
+        if app_type == "pipe":
+            _signals = get_pipe_ship_cnt(_name, start_date_id, run_date_id, engine)
+            detection_result = single_detect(
+                _signals, 
+                app_type,
+                _name, 
+                run_date_id, 
+                detector
+            )
+            detection_result_list.append(detection_result)
+        elif app_type == "port":
+            _signals = get_port_ship_cnt(_name, start_date_id, run_date_id, engine)
+            detection_result = single_detect(
+                _signals, 
+                app_type,
+                _name, 
+                run_date_id, 
+                detector
+            )
+            detection_result_list.append(detection_result)
+    return detection_result_list
+
+
+def rp_detect_engine(run_date: str) -> dict:
     """
     Run rolling percentile anomaly detection across all straits for a given date.
 
@@ -137,14 +226,13 @@ def pipe_rp_detect_engine(run_date: str, pipe_name: str | None = None) -> list[d
 
     Args:
         run_date: detection date in YYYY-MM-DD format.
-        pipe_name: Optional, if not None, output single pipe_name detection result.
 
     Returns:
         List of dicts, one per strait:
             {
                 "pipe_name"     : str,
                 "run_date_id"   : int,    # YYYYMMDD
-                "anomaly_flag"  : int,    # FLAG value (0–4)
+                "anomaly_flag"  : int,    # FLAG value (0-4)
                 "quantile_10"   : float,  # 10th-percentile ship count
                 "quantile_25"   : float,  # 25th-percentile ship count
                 "quantile_75"   : float,  # 75th-percentile ship count
@@ -164,17 +252,27 @@ def pipe_rp_detect_engine(run_date: str, pipe_name: str | None = None) -> list[d
     start_date_id = int(start_date_obj.strftime("%Y%m%d"))
 
     # base on run_date find out the records in monitor time window
-    # group by pipe name
-    pipe_name_list = get_pipe_name_list(engine)
-    detection_result_list = []
-    for _pipe_name in pipe_name_list:
-        if (pipe_name is not None) and (_pipe_name != pipe_name):
-            # only output one pipe detection result
-            continue
+    # group by pipe/port name
+    detect_config = {
+        "pipe": {
+            "name_list": get_pipe_name_list(engine),
+            "table": PIPE_TABLE
+        },
+        "port": {
+            "name_list": get_port_name_list(engine),
+            "table": PORT_TABLE
+        }
+    }
 
-        _signals = get_pipe_ship_cnt(_pipe_name, start_date_id, run_date_id, engine)
-        detection_result = single_pipe_detect(
-            _signals, _pipe_name, run_date_id, detector
+    app_detect_results = {}
+    for app_type, app_detect_config in detect_config.items():
+        detection_result = run_detect(
+            app_type=app_type,
+            app_detect_config=app_detect_config,
+            run_date_id=run_date_id, 
+            start_date_id=start_date_id,
+            detector=detector,
+            engine=engine
         )
-        detection_result_list.append(detection_result)
-    return detection_result_list
+        app_detect_results[app_type] = detection_result
+    return app_detect_results

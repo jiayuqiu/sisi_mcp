@@ -17,7 +17,7 @@ import pandas as pd
 
 from mcp_conductor.resources.utils.db import get_engine
 from mcp_conductor.resources.utils.logger import get_logger
-from mcp_conductor.detector.pipe_detect_engine import pipe_rp_detect_engine
+from mcp_conductor.detector.detect_engine import rp_detect_engine
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
 from mcp_conductor.templates.questions import (
     ENRICH_ANOMALY_FACTORS,
@@ -192,7 +192,7 @@ def analyze_congestion(pipe_name: str, run_date: str) -> dict[str, str]:
     }
 
 
-def save_anomaly_results(pipe_anomaly_list: list[dict]) -> None:
+def save_anomaly_results(app_anomaly_results: dict) -> None:
     """
     Persist detection results into m_pipe_anomaly_roll_percentile.
 
@@ -200,40 +200,49 @@ def save_anomaly_results(pipe_anomaly_list: list[dict]) -> None:
     overwrites the previous result.
 
     Args:
-        pipe_anomaly_list: output of pipe_detect_engine — list of dicts with
+        app_anomaly_results: output of pipe_detect_engine — list of dicts with
                            keys pipe_name, run_date_id, anomaly_flag.
     """
     updated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
     with sqlite3.connect(str(DB_PATH)) as conn:
-        for row in pipe_anomaly_list:
-            try:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO m_pipe_anomaly_roll_percentile
-                        (pipe_name, date_id, anomaly_flag, quantile_10, quantile_25, quantile_75, quantile_90, anomaly_ratio, updated_timestamp_utc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        row["pipe_name"],
-                        row["run_date_id"],
-                        int(row["anomaly_flag"]),
-                        row["quantile_10"],
-                        row["quantile_25"],
-                        row["quantile_75"],
-                        row["quantile_90"],
-                        row["anomaly_ratio"],
-                        updated_at,
-                    ),
-                )
-            except Exception:
-                logger.error("[%s] FAILED to save row: %s", row.get("run_date_id"), row, exc_info=True)
-                raise
-        conn.commit()
-    logger.info("Saved %d anomaly results to m_pipe_anomaly_roll_percentile.", len(pipe_anomaly_list))
+        for app_type, anamaly_result in app_anomaly_results.items():
+            if app_type == "pipe":
+                pass
+            elif app_type == "port":
+                pass
+            else:
+                raise ValueError(f"app_type only supports `pipe` or `port`, current value is {app_type}")
+            
+            for row in anamaly_result:
+                print(row)
+                try:
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO m_pipe_anomaly_roll_percentile
+                            (pipe_name, date_id, anomaly_flag, quantile_10, quantile_25, quantile_75, quantile_90, anomaly_ratio, updated_timestamp_utc)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            row[app_type],
+                            row["run_date_id"],
+                            int(row["anomaly_flag"]),
+                            row["quantile_10"],
+                            row["quantile_25"],
+                            row["quantile_75"],
+                            row["quantile_90"],
+                            row["anomaly_ratio"],
+                            updated_at,
+                        ),
+                    )
+                except Exception:
+                    logger.error("[%s] FAILED to save row: %s", row.get("run_date_id"), row, exc_info=True)
+                    raise
+            conn.commit()
+            logger.info("Saved %d anomaly results to m_pipe_anomaly_roll_percentile.", len(anamaly_result))
 
 
-def pipe_traffic_detect(run_date: str) -> None:
+def traffic_detect(run_date: str) -> None:
     """
     Run rolling percentile detection across all straits for a given date
     and persist the results to m_pipe_anomaly_roll_percentile.
@@ -242,10 +251,11 @@ def pipe_traffic_detect(run_date: str) -> None:
         run_date     : detection date in YYYY-MM-DD format.
     """
     # detect anomalies across all straits
-    pipe_anomaly_list = pipe_rp_detect_engine(run_date=run_date)
+    app_anomaly_list = rp_detect_engine(run_date=run_date)
 
     # persist results
-    save_anomaly_results(pipe_anomaly_list)
+    # TODO: add check app_anomaly_list before save the results to sqlite
+    save_anomaly_results(app_anomaly_list)
 
 
 if __name__ == "__main__":
@@ -257,4 +267,4 @@ if __name__ == "__main__":
     run_date = args.run_date
 
     # trigger detect
-    pipe_traffic_detect(run_date)
+    traffic_detect(run_date)

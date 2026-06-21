@@ -35,15 +35,17 @@ class RollingPercentileDetector(BaseDetector):
     def detect(
         self,
         value: DataFrame,
-        pipe_name: str,
+        name_str: str,
         run_date_id: int,
-        interval_days: int = 30
+        interval_days: int = 30,
+        location_col_name: str = ""
     ) -> dict:
         """
         Args:
             value        : full historical DataFrame for one strait,
                            must contain columns [date_id, ship_cnt].
-            pipe_name    : strait name (reserved for future use / logging).
+            col_name     : the column name storaging location info.
+            name_str     : strait or port name (reserved for future use / logging).
             run_date_id  : reference date in YYYYMMDD (reserved for future use).
             interval_days: number of most-recent days to evaluate. Default 30.
 
@@ -72,17 +74,17 @@ class RollingPercentileDetector(BaseDetector):
         return_dict["quantile_75"] = quantile_75
         return_dict["quantile_90"] = quantile_90
         if (quantile_10 == 0) and (quantile_90 == 0):
-            logger.warning(f"{pipe_name} on {run_date_id} has no recent a year traffic data.")
+            logger.warning(f"{name_str} on {run_date_id} has no recent a year traffic data.")
             return_dict["anomaly_flag"] = FLAG.NO_DATA
             
             return return_dict
         elif quantile_10 == quantile_90:
-            logger.warning(f"{pipe_name} on {run_date_id}, recent a year data with "
+            logger.warning(f"{name_str} on {run_date_id}, recent a year data with "
                            f"same 10% and 90% percentile value - {quantile_10}.")
             return_dict["anomaly_flag"] = FLAG.FLAT_DATA
             return return_dict
         elif 0 <= quantile_90 <= 3:
-            logger.warning(f"{pipe_name} on {run_date_id}, both ofquantile_90 < 3. "
+            logger.warning(f"{name_str} on {run_date_id}, both ofquantile_90 < 3. "
                            f"too small to detect.")
             return_dict["anomaly_flag"] = FLAG.INSUFFICIENT_DATA
             return return_dict

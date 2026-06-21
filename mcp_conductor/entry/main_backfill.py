@@ -50,8 +50,8 @@ def backfill(
 
         logger.info(f">>> Running traffic detection for {day}")
         if not dry_run:
-            from mcp_conductor.entry.main_traffic_detect import pipe_traffic_detect
-            pipe_traffic_detect(day)
+            from mcp_conductor.entry.main_traffic_detect import traffic_detect
+            traffic_detect(day)
 
         logger.info(f">>> Triggering Dify chatflow for {day}")
         if not dry_run:

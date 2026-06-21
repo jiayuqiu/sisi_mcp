@@ -42,7 +42,7 @@ from prefect.client.schemas.schedules import CronSchedule
 
 from mcp_conductor.entry.main_setup_schema import setup_schema
 from mcp_conductor.entry.main_sync_bci_data import sync_bci_data, get_last_synced_date
-from mcp_conductor.entry.main_traffic_detect import pipe_traffic_detect
+from mcp_conductor.entry.main_traffic_detect import traffic_detect
 from mcp_conductor.entry.main_trigger_dify_chatflow import (
     run as run_dify_chatflow,
     parse_iso_date,
@@ -87,7 +87,7 @@ def task_traffic_detect(run_date: str) -> dict:
     """Run rolling percentile anomaly detection."""
     logger = get_run_logger()
     logger.info("Running traffic detection for %s...", run_date)
-    pipe_traffic_detect(run_date)
+    traffic_detect(run_date)
     logger.info("Detection complete for %s.", run_date)
     return {"run_date": run_date}
 

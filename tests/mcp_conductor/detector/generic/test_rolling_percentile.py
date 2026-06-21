@@ -1,5 +1,4 @@
 import unittest
-import numpy as np
 import pandas as pd
 
 from mcp_conductor.detector.generic.rolling_percentile import RollingPercentileDetector
@@ -38,7 +37,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407)
         self.assertIsInstance(result, dict)
         self.assertIn("anomaly_flag", result)
         self.assertIn("quantile_10", result)
@@ -52,7 +51,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407)
         self.assertAlmostEqual(result["quantile_10"], 19.9, delta=1.0)
         self.assertAlmostEqual(result["quantile_90"], 99.1, delta=1.0)
 
@@ -66,7 +65,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.NORMAL)
         self.assertEqual(result["anomaly_ratio"], 0.0)
 
@@ -80,7 +79,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
         self.assertEqual(result["anomaly_ratio"], 1.0)
 
@@ -94,7 +93,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
 
     # ------------------------------------------------------------------
@@ -108,7 +107,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.NORMAL)
         self.assertAlmostEqual(result["anomaly_ratio"], 3 / 7, places=4)
 
@@ -119,7 +118,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407, interval_days=7)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
         self.assertAlmostEqual(result["anomaly_ratio"], 4 / 7, places=4)
 
@@ -137,7 +136,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
 
         d = RollingPercentileDetector()
         # interval_days=7 picks days 108-114 (normal) → NORMAL
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240414, interval_days=7)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240414, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.NORMAL)
 
     def test_interval_days_parameter_respected(self):
@@ -148,10 +147,10 @@ class TestRollingPercentileDetector(unittest.TestCase):
 
         d = RollingPercentileDetector()
         # interval_days=7 → only anomaly_block evaluated → ANOMALY
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240414, interval_days=7)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240414, interval_days=7)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
         # interval_days=14 → both blocks evaluated → 7/14 = 0.5, not > 0.5 → NORMAL
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240414, interval_days=14)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240414, interval_days=14)
         self.assertEqual(result["anomaly_flag"], FLAG.NORMAL)
 
     # ------------------------------------------------------------------
@@ -165,7 +164,7 @@ class TestRollingPercentileDetector(unittest.TestCase):
         df = pd.concat([_BASELINE, recent], ignore_index=True)
 
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407)
         self.assertEqual(result["anomaly_flag"], FLAG.ANOMALY)
 
     # ------------------------------------------------------------------
@@ -175,14 +174,14 @@ class TestRollingPercentileDetector(unittest.TestCase):
     def test_all_zero_returns_no_data(self):
         df = _make_df(range(1, 101), [0] * 100)
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407)
         self.assertEqual(result["anomaly_flag"], FLAG.NO_DATA)
 
     def test_flat_data_returns_flat_data(self):
         # all same non-zero value → p10 == p90
         df = _make_df(range(1, 101), [42] * 100)
         d = RollingPercentileDetector()
-        result = d.detect(df, pipe_name="马六甲海峡", run_date_id=20240407)
+        result = d.detect(df, location_col_name="pipe_name", name_str="马六甲海峡", run_date_id=20240407)
         self.assertEqual(result["anomaly_flag"], FLAG.FLAT_DATA)
 
     def test_no_data_and_flat_data_have_no_ratio(self):
@@ -190,9 +189,11 @@ class TestRollingPercentileDetector(unittest.TestCase):
         d = RollingPercentileDetector()
 
         result_zero = d.detect(_make_df(range(1, 101), [0] * 100),
-                               pipe_name="test", run_date_id=20240407)
+                               location_col_name="pipe_name", 
+                               name_str="test", run_date_id=20240407)
         self.assertNotIn("anomaly_ratio", result_zero)
 
         result_flat = d.detect(_make_df(range(1, 101), [42] * 100),
-                               pipe_name="test", run_date_id=20240407)
+                               location_col_name="pipe_name", 
+                               name_str="test", run_date_id=20240407)
         self.assertNotIn("anomaly_ratio", result_flat)
