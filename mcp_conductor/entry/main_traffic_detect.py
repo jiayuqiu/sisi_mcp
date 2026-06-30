@@ -215,7 +215,6 @@ def save_anomaly_results(app_anomaly_results: dict) -> None:
                 raise ValueError(f"app_type only supports `pipe` or `port`, current value is {app_type}")
             
             for row in anamaly_result:
-                print(row)
                 try:
                     conn.execute(
                         """

@@ -107,6 +107,10 @@ class RollingPercentileDetector(BaseDetector):
         else:
             # latest ship cnt != 0
             # count days whose ship_cnt falls outside [p10, p90]
+            if name_str == "霍尔木兹海峡":
+                quantile_25 = 15
+                quantile_75 = 25
+
             anomaly_cnt = 0
             for _, row in recent.iterrows():
                 if (row["ship_cnt"] < quantile_25) or (row["ship_cnt"] > quantile_75):
