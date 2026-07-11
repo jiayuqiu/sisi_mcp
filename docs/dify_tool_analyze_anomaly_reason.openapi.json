@@ -1,0 +1,180 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ask Traffic Question",
+    "description": "分析交通异常原因，结合天气、新闻等信息",
+    "version": "1.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://sisimcp-dify-api:8002",
+      "description": "容器网络内直连（推荐，两个 Compose 共享 sisi-dify-platform_default 网络）"
+    },
+    {
+      "url": "http://192.168.8.23:8002",
+      "description": "宿主机 LAN IP 回退方案"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AnalyzeAnomalyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "问题入参。必须为 JSON 字符串：{\"year\",\"month\",\"day\",\"location\"}。year 为 4 位、month/day 为 2 位（补零），与后端解析逻辑一致。",
+            "example": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
+          }
+        },
+        "required": [
+          "question"
+        ]
+      },
+      "AnalyzeAnomalySuccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "result": {
+            "type": "string",
+            "description": "汇总文本，格式为结论/天气因素/政治因素三段"
+          },
+          "run_date": {
+            "type": "string",
+            "description": "检测日期，格式 YYYY-MM-DD",
+            "example": "2026-04-16"
+          },
+          "pipe_name": {
+            "type": "string",
+            "description": "通道名称",
+            "example": "霍尔木兹海峡"
+          },
+          "conclusion": {
+            "type": "string",
+            "description": "异常结论，格式如：20260416日，霍尔木兹海峡发生交通异常"
+          },
+          "weather_factor": {
+            "type": "string",
+            "description": "天气因素分析"
+          },
+          "political_factor": {
+            "type": "string",
+            "description": "政治/安全因素分析"
+          }
+        },
+        "required": [
+          "success",
+          "result",
+          "run_date",
+          "pipe_name",
+          "conclusion",
+          "weather_factor",
+          "political_factor"
+        ]
+      },
+      "AnalyzeAnomalyErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "失败原因说明"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ]
+      }
+    }
+  },
+  "paths": {
+    "/api/analyze_anomaly_reason": {
+      "post": {
+        "summary": "分析交通异常原因",
+        "description": "深度分析交通异常原因，结合天气、新闻等信息给出详细解释。question 必须是 JSON 字符串。",
+        "operationId": "analyzeAnomalyReason",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeAnomalyRequest"
+              },
+              "examples": {
+                "json_string_input": {
+                  "summary": "JSON 字符串输入",
+                  "value": {
+                    "question": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "详细分析结果（成功或业务失败均返回 200）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AnalyzeAnomalySuccessResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AnalyzeAnomalyErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "success_example": {
+                    "summary": "成功示例",
+                    "value": {
+                      "success": true,
+                      "result": "- 结论\n20260416日，霍尔木兹海峡发生交通异常\n\n- 天气因素\n西北风增强并伴随能见度下降，可能导致船舶通行效率下降。\n\n- 政治因素\n地区军事活动升级与临时海上管制风险上升，可能导致通航延误。",
+                      "run_date": "2026-04-16",
+                      "pipe_name": "霍尔木兹海峡",
+                      "conclusion": "20260416日，霍尔木兹海峡发生交通异常",
+                      "weather_factor": "西北风增强并伴随能见度下降，可能导致船舶通行效率下降。",
+                      "political_factor": "地区军事活动升级与临时海上管制风险上升，可能导致通航延误。"
+                    }
+                  },
+                  "not_found_example": {
+                    "summary": "未找到记录",
+                    "value": {
+                      "success": false,
+                      "message": "未找到 2026-04-16 霍尔木兹海峡 的检测结果，请确认日期和通道名称是否正确。"
+                    }
+                  },
+                  "parse_error_example": {
+                    "summary": "入参无法解析",
+                    "value": {
+                      "success": false,
+                      "message": "无法解析问题。请传入 JSON 字符串：{\"year\",\"month\",\"day\",\"location\"}"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端异常"
+          }
+        }
+      }
+    }
+  }
+}

@@ -109,9 +109,14 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
 def parse_question_json(question: str) -> tuple[str | None, str | None]:
     if not question:
         return None, None
-    
+
     structured_question = json.loads(question)
-    run_date = f"{structured_question['year']}-{structured_question['month']}-{structured_question['day']}"
+    # Zero-pad so unpadded values (e.g. month "4", day "6") don't corrupt date_id
+    run_date = (
+        f"{int(structured_question['year']):04d}"
+        f"-{int(structured_question['month']):02d}"
+        f"-{int(structured_question['day']):02d}"
+    )
     pipe_name = structured_question["location"]
     return run_date, pipe_name
 
@@ -232,7 +237,14 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         logger.info(f"Analyze anomaly reason request: {request.question}")
 
         # Parse the question
-        run_date, pipe_name = parse_question_json(request.question)
+        try:
+            run_date, pipe_name = parse_question_json(request.question)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return {
+                "success": False,
+                "message": "无法解析问题。请传入 JSON 字符串：{\"year\",\"month\",\"day\",\"location\"}，"
+                           "示例：{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
+            }
         logger.info(f"analyze_anomaly_reason get {run_date} - {pipe_name}")
         if not run_date or not pipe_name:
             return {

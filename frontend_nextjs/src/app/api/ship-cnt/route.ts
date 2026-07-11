@@ -92,26 +92,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const rows =
-      dimension === "port"
-        ? (db
-            .prepare(
-              `SELECT s.date_id, s.ship_cnt, NULL AS anomaly_flag
-               FROM ${sourceTable} s
-               WHERE s.${sourceNameColumn} = ? AND s.date_id >= ? AND s.date_id <= ?
-               ORDER BY s.date_id ASC`,
-            )
-            .all(name, startId, endId) as ShipCntRow[])
-        : (db
-            .prepare(
-              `SELECT s.date_id, s.ship_cnt, a.anomaly_flag
-               FROM ${sourceTable} s
-               LEFT JOIN m_pipe_anomaly_roll_percentile a
-                 ON a.pipe_name = s.${sourceNameColumn} AND a.date_id = s.date_id
-               WHERE s.${sourceNameColumn} = ? AND s.date_id >= ? AND s.date_id <= ?
-               ORDER BY s.date_id ASC`,
-            )
-            .all(name, startId, endId) as ShipCntRow[]);
+    // Both pipes and ports derive their plot color from anomaly_flag in
+    // m_pipe_anomaly_roll_percentile (keyed by name + date_id). The
+    // detection_flag column on the source tables is deprecated.
+    const rows = db
+      .prepare(
+        `SELECT s.date_id, s.ship_cnt, a.anomaly_flag
+           FROM ${sourceTable} s
+           LEFT JOIN m_pipe_anomaly_roll_percentile a
+             ON a.pipe_name = s.${sourceNameColumn} AND a.date_id = s.date_id
+           WHERE s.${sourceNameColumn} = ? AND s.date_id >= ? AND s.date_id <= ?
+           ORDER BY s.date_id ASC`,
+      )
+      .all(name, startId, endId) as ShipCntRow[];
 
     // Fetch overall min/max date_id for this pipe (for date picker bounds)
     const bounds = db

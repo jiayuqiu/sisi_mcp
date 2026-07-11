@@ -6,8 +6,8 @@ Everything you need to get SISI up and running, in order.
 
 | Step | What to do | Done? |
 |------|-----------|-------|
-| 1 | Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) | ☐ |
-| 2 | Clone & start **Dify** platform (Section 1) | ☐ |
+| 1 | Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) Done| ☐ |
+| 2 | Clone & start **Dify** platform (Section 1) Done| ☐ |
 | 3 | Generate a **Dify API key** (Section 2.1) | ☐ |
 | 4 | Fill in `sisimcp/.env` with your API keys (Section 2.2) | ☐ |
 | 5 | Run `docker compose up -d` inside `sisimcp/docker/` (Section 2.3) | ☐ |
