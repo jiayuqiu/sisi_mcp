@@ -88,29 +88,73 @@ Project path: /c/Users/qiuji/codebase/dify
 
 ## Database Schema (`data/sisi.sqlite`)
 
+`mcp_conductor/entry/main_setup_schema.py` is the source of truth — run it to create or
+update the database. The tables the sync writes to:
+
 ```sql
+-- Daily metrics per shipping channel (strait / canal)
+CREATE TABLE IF NOT EXISTS ship_cnt_in_pipe (
+    pipe_name TEXT,             -- Name of the channel (e.g., '马六甲海峡')
+    date_id INTEGER,            -- Date in YYYYMMDD format
+    ship_cnt INTEGER,           -- Number of ships passing the strait
+    duration REAL,              -- Time of ships passing the strait
+    detection_flag TEXT,        -- Anomaly marker (e.g., '红') or NULL; legacy, not written by current code
+    PRIMARY KEY (pipe_name, date_id)
+);
+
+-- Daily metrics per port (same shape, keyed on port_name)
+CREATE TABLE IF NOT EXISTS ship_cnt_in_port (
+    port_name TEXT,             -- Name of the port (e.g., '鹿特丹港')
+    date_id INTEGER,
+    ship_cnt INTEGER,           -- Number of ships berthing in the port
+    duration REAL,              -- Time of ships berthing in the port
+    detection_flag TEXT,
+    PRIMARY KEY (port_name, date_id)
+);
+
 -- Agent work history / DeepSeek call logs
-CREATE TABLE IF NOT EXISTS log_agent_work_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE IF NOT EXISTS log_agent_worklog (
     return_id TEXT UNIQUE NOT NULL,
     question_type TEXT,
     full_response TEXT,
     payload TEXT,
-    run_date DATE DEFAULT (date('now')),
+    date_id INT,
+    pipe_name TEXT,
     run_timestamp TEXT DEFAULT (datetime('now')),
     content TEXT,
-    reasoning_content TEXT
-);
-
--- Daily ship counts per shipping channel
-CREATE TABLE IF NOT EXISTS ship_cnt_in_pipe (
-    pipe_name TEXT,             -- Name of the channel (e.g., '马六甲海峡')
-    date_id INTEGER,            -- Date in YYYYMMDD format
-    ship_cnt INTEGER,           -- Number of ships
-    detection_flag TEXT,        -- Anomaly marker (e.g., '红') or NULL
-    PRIMARY KEY (pipe_name, date_id)
+    reasoning_content TEXT,
+    PRIMARY KEY (pipe_name, date_id, run_timestamp)
 );
 ```
+
+Also created by `setup_schema()`: `m_pipe_anomaly_roll_percentile`,
+`m_roll_percentile_parameter`, `dim_anomaly_flag` (seeded from
+`ROLLING_PERCENTILE_FLAG`), and the view `vw_m_pipe_anomaly_roll_percentile`.
+
+`m_roll_percentile_parameter` holds the frozen detection bounds per
+`(location_type, location_name, metric, valid_from_date_id)` — the detector reads them
+instead of recomputing quantiles per run. Rows with `is_locked = 1` are manual overrides
+and must not be overwritten by the refit job. See
+`docs/plan-duration-aware-detector.md`.
+
+`sail_time_in_pipe` is a legacy import from 中国航运数据库 (2023–2025), not created or
+written by any code. Do not confuse it with `ship_cnt_in_pipe.duration`.
+
+### BCI metric routing (`zbxx`)
+
+The BCI API returns a `zbxx` field on each result item identifying the metric. Two
+metrics share one row, so `main_sync_bci_data.py` routes **per item** via `ZBXX_ROUTES`:
+
+| `zbxx` | Table | Column |
+|---|---|---|
+| 101-0001 | `ship_cnt_in_port` | `ship_cnt` |
+| 101-0002 | `ship_cnt_in_port` | `duration` |
+| 101-0003 | `ship_cnt_in_pipe` | `ship_cnt` |
+| 101-0004 | `ship_cnt_in_pipe` | `duration` |
+
+The request groups (`101-0003,101-0004`) are API batching only and must **not** be used
+to pick the target table. Writes use `INSERT ... ON CONFLICT ... DO UPDATE` on a single
+column: `INSERT OR REPLACE` would delete the row and null out the sibling metric.
 
 ## Cross-Container Networking
 

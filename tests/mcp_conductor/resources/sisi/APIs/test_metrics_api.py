@@ -451,7 +451,7 @@ class TestMetricsAPIGetMetricsValue(unittest.TestCase):
 
         start_date = "2026-04-10"
         end_date = "2026-04-10"
-        zbxxs_val = "101-0001,101-0002"
+        zbxxs_val = "101-0003,101-0004"
 
         print(f"\nSending real MetricsAPI request to {self.api.base_url}...")
         result = self.api.get_metrics_value(start_date, end_date, zbxxs_val)
@@ -473,8 +473,6 @@ class TestMetricsAPIGetMetricsValue(unittest.TestCase):
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
             print(f"MetricsAPI real request failed (possible whitelist/key issue): {result}")
-    
-    
 
 
 if __name__ == "__main__":

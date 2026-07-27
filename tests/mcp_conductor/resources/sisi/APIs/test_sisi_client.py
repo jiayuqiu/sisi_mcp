@@ -4,6 +4,7 @@ import re
 from mcp_conductor.resources.sisi.APIs.LLM import SISIClient
 
 
+@unittest.skip("Temporarily skipped: hits the live SISI API, which is currently stopped.")
 class TestSISIClient(unittest.TestCase):
     def setUp(self):
         self.client = SISIClient()

@@ -19,9 +19,21 @@ SQL_CREATE_SHIP_CNT_IN_PIPE = """
 CREATE TABLE IF NOT EXISTS ship_cnt_in_pipe (
     pipe_name      TEXT,
     date_id        INTEGER,  -- YYYYMMDD format
-    ship_cnt       INTEGER,
+    ship_cnt       INTEGER,  -- count of ship passing the strait
+    duration       REAL,     -- time of ship passing the strait
     detection_flag TEXT,     -- reserved, unused
     PRIMARY KEY (pipe_name, date_id)
+);
+"""
+
+SQL_CREATE_SHIP_CNT_IN_PORT = """
+CREATE TABLE IF NOT EXISTS ship_cnt_in_port (
+    port_name      TEXT,
+    date_id        INTEGER,  -- YYYYMMDD format
+    ship_cnt       INTEGER,  -- count of ship berthing in the port
+    duration       REAL,     -- time of ship berthing in the port
+    detection_flag TEXT,     -- reserved, unused
+    PRIMARY KEY (port_name, date_id)
 );
 """
 
@@ -37,6 +49,31 @@ CREATE TABLE IF NOT EXISTS m_pipe_anomaly_roll_percentile (
     anomaly_ratio          REAL,     -- outlier days / interval_days
     updated_timestamp_utc  TEXT,     -- ISO-8601, UTC (e.g. 2024-04-05T12:00:00)
     PRIMARY KEY (pipe_name, date_id)
+);
+"""
+
+SQL_CREATE_M_ROLL_PERCENTILE_PARAMETER = """
+CREATE TABLE IF NOT EXISTS m_roll_percentile_parameter (
+    location_type          TEXT NOT NULL,     -- 'pipe' | 'port'
+    location_name          TEXT NOT NULL,
+    metric                 TEXT NOT NULL,     -- 'ship_cnt' | 'duration'
+    valid_from_date_id     INTEGER NOT NULL,  -- YYYYMMDD, first date this row applies to
+    valid_to_date_id       INTEGER,           -- YYYYMMDD, NULL = currently in force
+
+    lower_bound            REAL,              -- NULL when status <> 'OK'
+    upper_bound            REAL,
+    anomaly_threshold      REAL NOT NULL,     -- per-location: the null ratio varies 0.20-0.60
+    interval_days          INTEGER NOT NULL DEFAULT 30,
+    status                 TEXT NOT NULL,     -- 'OK' | 'FLAT' | 'INSUFFICIENT' | 'NO_DATA'
+
+    fit_method             TEXT NOT NULL,     -- 'percentile_10_90' | 'manual'
+    fit_start_date_id      INTEGER,           -- fitting window, recorded to spot regime breaks
+    fit_end_date_id        INTEGER,
+    fit_sample_size        INTEGER,           -- nonzero days actually used
+    is_locked              INTEGER NOT NULL DEFAULT 0,  -- 1 = refit job must not overwrite
+    updated_timestamp_utc  TEXT,              -- ISO-8601, UTC
+
+    PRIMARY KEY (location_type, location_name, metric, valid_from_date_id)
 );
 """
 
@@ -95,8 +132,14 @@ def setup_schema() -> None:
         conn.execute(SQL_CREATE_SHIP_CNT_IN_PIPE)
         logger.info("Table ship_cnt_in_pipe: ready.")
 
+        conn.execute(SQL_CREATE_SHIP_CNT_IN_PORT)
+        logger.info("Table ship_cnt_in_port: ready.")
+
         conn.execute(SQL_CREATE_M_PIPE_ANOMALY_ROLL_PERCENTILE)
         logger.info("Table m_pipe_anomaly_roll_percentile: ready.")
+
+        conn.execute(SQL_CREATE_M_ROLL_PERCENTILE_PARAMETER)
+        logger.info("Table m_roll_percentile_parameter: ready.")
 
         conn.execute(SQL_CREATE_DIM_ANOMALY_FLAG)
         for f in dataclass_fields(ROLLING_PERCENTILE_FLAG):

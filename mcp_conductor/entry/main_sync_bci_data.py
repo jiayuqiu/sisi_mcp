@@ -3,6 +3,7 @@ import sys
 import sqlite3
 import logging
 import argparse
+from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -17,10 +18,13 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = Path("./data/sisi.sqlite")
 STATUS_PATH = Path("./data/sync_status.json")
-
-
 LOG_PATH = Path("./tmp/sync_history.json")
-
+ZBXX_ROUTES = {
+    "101-0001": {"table": "ship_cnt_in_port", "key_col": "port_name", "value_col": "ship_cnt", "cast": int},
+    "101-0002": {"table": "ship_cnt_in_port", "key_col": "port_name", "value_col": "duration", "cast": float},
+    "101-0003": {"table": "ship_cnt_in_pipe", "key_col": "pipe_name", "value_col": "ship_cnt", "cast": int},
+    "101-0004": {"table": "ship_cnt_in_pipe", "key_col": "pipe_name", "value_col": "duration", "cast": float},
+}
 
 def write_status(status: str, **kwargs):
     """Write sync status to data/sync_status.json and append to tmp/sync_history.json."""
@@ -63,22 +67,15 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
     write_status("running", start_date=start_date, end_date=end_date)
 
     api = MetricsAPI()
+    # Request batching only — each item's destination comes from its own zbxx.
     zbxxs_groups = [
-        {
-            "zbxxs": "101-0003,101-0004",  # strait data
-            "target_table": "ship_cnt_in_pipe",
-        },
-        {
-            "zbxxs": "101-0001,101-0002",  # port data
-            "target_table": "ship_cnt_in_port",
-        },
+        "101-0003,101-0004",  # strait: ship count + transit time
+        "101-0001,101-0002",  # port: ship count + berthing time
     ]
 
-    tagged_data = []
+    fetched_items = []
     api_failures = []
-    for group in zbxxs_groups:
-        zbxxs_val = group["zbxxs"]
-        target_table = group["target_table"]
+    for zbxxs_val in zbxxs_groups:
         logger.info(
             "Fetching BCI metrics from %s to %s (zbxxs=%s)...",
             start_date,
@@ -91,7 +88,6 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
             api_failures.append(
                 {
                     "zbxxs": zbxxs_val,
-                    "target_table": target_table,
                     "response": response,
                 }
             )
@@ -103,14 +99,14 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
             logger.warning("No data for zbxxs=%s: %s", zbxxs_val, response)
             continue
 
-        tagged_data.extend((item, target_table) for item in result)
+        fetched_items.extend(result)
 
-    if api_failures and not tagged_data:
+    if api_failures and not fetched_items:
         msg = f"All API requests failed: {api_failures}"
         write_status("failed", start_date=start_date, end_date=end_date, error=msg)
         return {"success": False, "inserted_count": 0, "reason": "api_failed"}
 
-    if not tagged_data:
+    if not fetched_items:
         msg = "No data in API response for both zbxxs groups"
         logger.warning(msg)
         write_status("failed", start_date=start_date, end_date=end_date, error=msg)
@@ -120,60 +116,86 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
     conn = sqlite3.connect(str(DB_PATH.absolute()))
     cursor = conn.cursor()
     inserted_count = 0
-    inserted_pipe_count = 0
-    inserted_port_count = 0
+    inserted_by_metric = defaultdict(int)
+    malformed_count = 0
 
     try:
-        for item, target_table in tagged_data:
+        for item in fetched_items:
             if not isinstance(item, dict):
                 continue
 
-            record_date = item.get("zbrq")       # YYYY-MM-DD
-            location_name = item.get("xftj1Value")
-            value = item.get("zbsj")             # ship count
+            # A malformed item means the API contract broke — log it loudly, but skip
+            # only that item. Aborting the whole day would discard the valid rows that
+            # arrived alongside it.
+            try:
+                record_date: str | None = item.get("zbrq")  # YYYY-MM-DD
+                if record_date is None:
+                    raise ValueError(f"Missing zbrq in item: {item}")
 
-            if not record_date or not location_name or value is None:
-                logger.debug("Skipping item with missing fields: %s", item)
+                location_name: str | None = item.get("xftj1Value")
+                if location_name is None:
+                    raise ValueError(f"Missing xftj1Value in item: {item}")
+
+                value_business_type: str | None = item.get("zbxx")
+                if value_business_type is None:
+                    raise ValueError(f"Missing zbxx in item: {item}")
+
+                value: str | None = item.get("zbsj")
+                if value is None:
+                    raise ValueError(f"Missing zbsj in item: {item}")
+            except ValueError as e:
+                malformed_count += 1
+                logger.error("Skipping malformed item: %s", e)
+                continue
+
+            zbxx_config_dict = ZBXX_ROUTES.get(value_business_type)
+            if zbxx_config_dict is None:
+                logger.warning("Skipping item with unroutable zbxx %r: %s", value_business_type, item)
                 continue
 
             # Convert YYYY-MM-DD -> YYYYMMDD
             date_id = int(str(record_date).replace("-", ""))
 
             try:
-                ship_cnt = int(float(value))
+                # float() first: the API returns strings, and int("3.0") raises.
+                casted_value = zbxx_config_dict['cast'](float(value))
             except (TypeError, ValueError):
                 logger.debug("Skipping item with invalid numeric zbsj: %s", item)
                 continue
 
-            if target_table == "ship_cnt_in_pipe":
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO ship_cnt_in_pipe (pipe_name, date_id, ship_cnt, detection_flag)
-                    VALUES (?, ?, ?, NULL)
-                    """,
-                    (location_name, date_id, ship_cnt)
-                )
-                inserted_pipe_count += cursor.rowcount
-            elif target_table == "ship_cnt_in_port":
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO ship_cnt_in_port (port_name, date_id, ship_cnt, detection_flag)
-                    VALUES (?, ?, ?, NULL)
-                    """,
-                    (location_name, date_id, ship_cnt)
-                )
-                inserted_port_count += cursor.rowcount
-            else:
-                logger.warning("Unknown target table %s. Skipping item: %s", target_table, item)
+            # Upsert only this metric's column: ship_cnt and duration share a row
+            # and arrive as separate zbxx items, so a plain INSERT OR REPLACE
+            # would null out whichever one was written first.
+            cursor.execute(
+                f"""
+                INSERT INTO {zbxx_config_dict['table']} ({zbxx_config_dict['key_col']}, date_id, {zbxx_config_dict['value_col']})
+                VALUES (?, ?, ?)
+                ON CONFLICT({zbxx_config_dict['key_col']}, date_id)
+                DO UPDATE SET {zbxx_config_dict['value_col']} = excluded.{zbxx_config_dict['value_col']}
+                """,
+                (location_name, date_id, casted_value)
+            )
+            inserted_by_metric[
+                f"{zbxx_config_dict['table']}.{zbxx_config_dict['value_col']}"
+            ] += cursor.rowcount
 
-        inserted_count = inserted_pipe_count + inserted_port_count
+        inserted_count = sum(inserted_by_metric.values())
+
+        # Every item was malformed — nothing landed, so the day is a failure even
+        # though no single exception escaped the loop.
+        if inserted_count == 0 and malformed_count:
+            msg = f"All {malformed_count} items were malformed"
+            logger.error(msg)
+            conn.rollback()
+            write_status("failed", start_date=start_date, end_date=end_date, error=msg)
+            return {"success": False, "inserted_count": 0, "reason": "malformed_items"}
 
         conn.commit()
         logger.info(
-            "Successfully synced %d records (pipe=%d, port=%d).",
+            "Successfully synced %d records (%s)%s.",
             inserted_count,
-            inserted_pipe_count,
-            inserted_port_count,
+            ", ".join(f"{k}={v}" for k, v in sorted(inserted_by_metric.items())),
+            f", skipped {malformed_count} malformed" if malformed_count else "",
         )
         write_status("success", start_date=start_date, end_date=end_date, inserted_count=inserted_count)
         return {"success": True, "inserted_count": inserted_count, "reason": None}

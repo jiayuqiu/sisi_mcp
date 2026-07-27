@@ -29,7 +29,10 @@ def get_pipe_ship_cnt(pipe_name: str, start_date_id: int, end_date_id: int, engi
     """
     get_ship_cnt_sql = f"""
             SELECT 
-                * 
+                pipe_name,
+                date_id,
+                ship_cnt,
+                duration
             FROM 
                 ship_cnt_in_pipe 
             WHERE 
