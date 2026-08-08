@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-from mcp_conductor.detector.generic.rolling_percentile import RollingPercentileDetector
+from mcp_conductor.detector.roll_percentile import RollingPercentileDetector
 from mcp_conductor.detector.detect_engine import (
     PIPE_TABLE,
     PORT_TABLE,

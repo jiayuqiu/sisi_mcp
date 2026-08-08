@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from mcp_conductor.detector.generic.rolling_percentile import RollingPercentileDetector
+from mcp_conductor.detector.roll_percentile import RollingPercentileDetector
 from mcp_conductor.resources.utils.sisi_dataclasses import ROLLING_PERCENTILE_FLAG as FLAG
 
 

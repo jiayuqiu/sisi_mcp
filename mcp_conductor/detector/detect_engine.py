@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy import text
 
-from mcp_conductor.detector.generic.rolling_percentile import RollingPercentileDetector
+from mcp_conductor.detector.roll_percentile import RollingPercentileDetector
 from mcp_conductor.resources.utils.db import get_engine
 from mcp_conductor.resources.utils.sisi_dataclasses import ROLLING_PERCENTILE_FLAG as FLAG
 

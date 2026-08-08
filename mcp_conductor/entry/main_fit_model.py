@@ -79,9 +79,8 @@ def fit_model(
     return results
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
+def build_parser() -> argparse.ArgumentParser:
+    """Build the fitting CLI parser separately so argument behaviour is testable."""
     parser = argparse.ArgumentParser(description="Fit rolling-percentile detection parameters")
     parser.add_argument("--recent_records", type=int, default=DEFAULT_RECENT_RECORDS,
                         help=f"Usable records per location (default {DEFAULT_RECENT_RECORDS}); 0 = all")
@@ -94,9 +93,14 @@ if __name__ == "__main__":
     parser.add_argument("--metric", choices=list(VALID_METRICS), default=None,
                         help="Restrict to one metric; default fits both")
     parser.add_argument("--dry_run", action="store_true", help="Compute without writing")
-    args = parser.parse_args()
+    return parser
 
-    fit_model(
+
+def main(argv: list[str] | None = None) -> list[dict]:
+    """Parse CLI arguments and run fitting; return results for callers and tests."""
+    args = build_parser().parse_args(argv)
+
+    return fit_model(
         recent_records=args.recent_records,
         as_of_date_id=args.as_of,
         fit_start=args.fit_start,
@@ -104,3 +108,8 @@ if __name__ == "__main__":
         metric=args.metric,
         persist=not args.dry_run,
     )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    main()
