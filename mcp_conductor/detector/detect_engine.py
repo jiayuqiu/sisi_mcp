@@ -2,6 +2,7 @@ import pandas as pd
 import logging
 from datetime import datetime, timedelta
 from typing import Any
+from sqlalchemy import text
 
 from mcp_conductor.detector.generic.rolling_percentile import RollingPercentileDetector
 from mcp_conductor.resources.utils.db import get_engine
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 PIPE_TABLE = "ship_cnt_in_pipe"
 PORT_TABLE = "ship_cnt_in_port"
+PARAM_TABLE = "m_roll_percentile_parameter"
 
 
 def get_pipe_ship_cnt(pipe_name: str, start_date_id: int, end_date_id: int, engine) -> pd.DataFrame:
@@ -28,14 +30,14 @@ def get_pipe_ship_cnt(pipe_name: str, start_date_id: int, end_date_id: int, engi
         DataFrame with all columns from ship_cnt_in_pipe for the given strait.
     """
     get_ship_cnt_sql = f"""
-            SELECT 
+            SELECT
                 pipe_name,
                 date_id,
                 ship_cnt,
                 duration
-            FROM 
-                ship_cnt_in_pipe 
-            WHERE 
+            FROM
+                ship_cnt_in_pipe
+            WHERE
                 pipe_name = '{pipe_name}'
                 and date_id >= {start_date_id} and date_id <= {end_date_id}
         """
@@ -83,9 +85,9 @@ def get_pipe_name_list(engine) -> list[str]:
         ValueError: if the table contains no rows.
     """
     sql = f"""
-        SELECT DISTINCT 
-            pipe_name 
-        FROM 
+        SELECT DISTINCT
+            pipe_name
+        FROM
             ship_cnt_in_pipe
         WHERE
             pipe_name NOT LIKE 'test_%';
@@ -111,10 +113,10 @@ def get_port_name_list(engine) -> list[str]:
     Raises:
         ValueError: if the table contains no rows.
     """
-    sql = f"""
-        SELECT DISTINCT 
-            port_name 
-        FROM 
+    sql = """
+        SELECT DISTINCT
+            port_name
+        FROM
             ship_cnt_in_port
         WHERE
             port_name NOT LIKE 'test_%';
@@ -127,11 +129,44 @@ def get_port_name_list(engine) -> list[str]:
     return df.port_name.tolist()
 
 
-def single_detect(signals: pd.DataFrame,
-                  location_col_name: str,
-                  name_str: str,
-                  run_date_id: int,
-                  detector: RollingPercentileDetector) -> dict:
+def get_roll_percentile_parameters(
+    location_type: str, location_name: str, metric: str, run_date_id: int, engine
+) -> dict | None:
+    """Return the single parameter row in force for a location on ``run_date_id``."""
+    sql = text(
+        f"""
+        SELECT lower_bound, upper_bound, anomaly_threshold, interval_days, status
+        FROM {PARAM_TABLE}
+        WHERE location_type = :location_type
+          AND location_name = :location_name
+          AND metric = :metric
+          AND valid_from_date_id <= :run_date_id
+          AND (valid_to_date_id IS NULL OR valid_to_date_id >= :run_date_id)
+        ORDER BY valid_from_date_id DESC
+        LIMIT 1
+        """
+    )
+    with engine.connect() as connection:
+        row = connection.execute(
+            sql,
+            {
+                "location_type": location_type,
+                "location_name": location_name,
+                "metric": metric,
+                "run_date_id": run_date_id,
+            },
+        ).mappings().first()
+    return dict(row) if row else None
+
+
+def detect_one_location(
+    signals: pd.DataFrame,
+    location_col_name: str,
+    name_str: str,
+    run_date_id: int,
+    detector: RollingPercentileDetector,
+    parameters: dict | None,
+) -> dict:
     """
     Run rolling-percentile detection on a single strait's historical data.
 
@@ -168,11 +203,13 @@ def single_detect(signals: pd.DataFrame,
             "anomaly_ratio": None,
         }
     else:
-        # feed the ship cnt into detector, will get changepoints as expected.
-        anomaly_detection = detector.detect(value=signals, 
-                                            location_col_name=location_col_name,
-                                            name_str=name_str, 
-                                            run_date_id=run_date_id)
+        anomaly_detection = detector.detect(
+            value=signals,
+            location_col_name=location_col_name,
+            name_str=name_str,
+            run_date_id=run_date_id,
+            parameters=parameters,
+        )
     detection_result = {
         location_col_name: name_str,
         "run_date_id": run_date_id,
@@ -187,8 +224,8 @@ def single_detect(signals: pd.DataFrame,
 
 
 def run_detect(app_type: str,
-               app_detect_config: dict, 
-               run_date_id: int, 
+               app_detect_config: dict,
+               run_date_id: int,
                start_date_id: int,
                detector: RollingPercentileDetector,
                engine) -> list:
@@ -196,25 +233,29 @@ def run_detect(app_type: str,
     detection_result_list = []
     for _name in app_detect_config["name_list"]:
         if app_type == "pipe":
-            _signals = get_pipe_ship_cnt(_name, start_date_id, run_date_id, engine)
-            detection_result = single_detect(
-                _signals, 
-                app_type,
-                _name, 
-                run_date_id, 
-                detector
-            )
-            detection_result_list.append(detection_result)
+            load_signals = get_pipe_ship_cnt
         elif app_type == "port":
-            _signals = get_port_ship_cnt(_name, start_date_id, run_date_id, engine)
-            detection_result = single_detect(
-                _signals, 
-                app_type,
-                _name, 
-                run_date_id, 
-                detector
-            )
-            detection_result_list.append(detection_result)
+            load_signals = get_port_ship_cnt
+        else:
+            raise ValueError(f"Unsupported app_type: {app_type}")
+
+        parameters = get_roll_percentile_parameters(
+            location_type=app_type,
+            location_name=_name,
+            metric="ship_cnt",
+            run_date_id=run_date_id,
+            engine=engine,
+        )
+        signals = load_signals(_name, start_date_id, run_date_id, engine)
+        detection_result = detect_one_location(
+            signals,
+            app_type,
+            _name,
+            run_date_id,
+            detector,
+            parameters,
+        )
+        detection_result_list.append(detection_result)
     return detection_result_list
 
 
@@ -272,7 +313,7 @@ def rp_detect_engine(run_date: str) -> dict:
         detection_result = run_detect(
             app_type=app_type,
             app_detect_config=app_detect_config,
-            run_date_id=run_date_id, 
+            run_date_id=run_date_id,
             start_date_id=start_date_id,
             detector=detector,
             engine=engine

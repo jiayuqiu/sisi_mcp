@@ -1,4 +1,3 @@
-import numpy as np
 from typing import Dict, Any
 
 from pandas import DataFrame
@@ -12,25 +11,20 @@ logger = get_logger(__name__)
 
 class RollingPercentileDetector(BaseDetector):
     """
-    Detects whether a strait's recent traffic is anomalous using percentile bounds.
+    Detects whether a location's recent traffic is anomalous using fitted bounds.
 
     Strategy:
-        1. Compute p10 and p90 from the full historical ship count data.
-        2. Inspect the most recent `interval_days` days.
-        3. Count how many of those days fall outside [p10, p90].
-        4. If the anomaly ratio exceeds `anomaly_percentage_threshold`, the strait
-           is considered anomalous (too busy or too vacant).
-
-    Config keys:
-        anomaly_percentage_threshold (float): ratio (0–1) of recent days that must
-                                              be outliers to trigger an alert.
-                                              Default: 0.5 (50 % of interval_days).
+        1. Receive bounds and threshold fitted offline for the location and run date.
+        2. Inspect the stored number of most-recent days.
+        3. Count the days outside the stored [lower_bound, upper_bound] band.
+        4. Flag when that ratio exceeds the stored anomaly threshold.
     """
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         super().__init__(config)
-        self.window: int = 365  # get a year data to calculate 10 and 90 percentile value.
-        self.anomaly_percentage_threshold = float(self.config.get("anomaly_percentage_threshold", 0.5))
+        # The engine uses this to load enough recent source rows for the default
+        # scoring interval. Bounds are never calculated from this window.
+        self.window: int = 365
 
     def detect(
         self,
@@ -38,16 +32,20 @@ class RollingPercentileDetector(BaseDetector):
         name_str: str,
         run_date_id: int,
         interval_days: int = 30,
-        location_col_name: str = ""
+        location_col_name: str = "",
+        parameters: dict | None = None,
     ) -> dict:
         """
         Args:
-            value        : full historical DataFrame for one strait,
+            value        : historical DataFrame for one strait, containing the days to score.
                            must contain columns [date_id, ship_cnt].
             col_name     : the column name storaging location info.
             name_str     : strait or port name (reserved for future use / logging).
             run_date_id  : reference date in YYYYMMDD (reserved for future use).
             interval_days: number of most-recent days to evaluate. Default 30.
+            parameters   : effective m_roll_percentile_parameter row for this
+                           location and run date.  Bounds and threshold are fitted
+                           offline; they must never be derived from ``value``.
 
         Returns:
             dict with keys:
@@ -61,36 +59,40 @@ class RollingPercentileDetector(BaseDetector):
                     FLAG.FLAT_DATA         (3) — p10 == p90, cannot distinguish normal from anomaly.
                     FLAG.INSUFFICIENT_DATA (4) — both p10 and p90 <= 3, counts too small to detect.
         """
-        # init return value
-        return_dict = {}
-        
-        # derive p10 / p90 bounds from the entire historical record
-        quantile_10 = np.percentile(value["ship_cnt"], 10)
-        quantile_25 = np.percentile(value["ship_cnt"], 25)
-        quantile_75 = np.percentile(value["ship_cnt"], 75)
-        quantile_90 = np.percentile(value["ship_cnt"], 90)
-        return_dict["quantile_10"] = quantile_10
-        return_dict["quantile_25"] = quantile_25
-        return_dict["quantile_75"] = quantile_75
-        return_dict["quantile_90"] = quantile_90
-        if (quantile_10 == 0) and (quantile_90 == 0):
-            logger.warning(f"{name_str} on {run_date_id} has no recent a year traffic data.")
-            return_dict["anomaly_flag"] = FLAG.NO_DATA
-            
-            return return_dict
-        elif quantile_10 == quantile_90:
-            logger.warning(f"{name_str} on {run_date_id}, recent a year data with "
-                           f"same 10% and 90% percentile value - {quantile_10}.")
-            return_dict["anomaly_flag"] = FLAG.FLAT_DATA
-            return return_dict
-        elif 0 <= quantile_90 <= 3:
-            logger.warning(f"{name_str} on {run_date_id}, both ofquantile_90 < 3. "
-                           f"too small to detect.")
-            return_dict["anomaly_flag"] = FLAG.INSUFFICIENT_DATA
-            return return_dict
-        # elif (quantile_90 > 3) and (quantile_10 == 0):
-        #     logger.warning(f"{pipe_name} on {run_date_id}, quantile_10 is 0, set quantile_10 = 3")
-        #     quantile_10 = 3
+        if parameters is None:
+            logger.warning("%s on %s has no fitted roll-percentile parameters.", name_str, run_date_id)
+            return {"anomaly_flag": FLAG.NO_DATA}
+
+        if value.empty:
+            logger.warning("%s on %s has no source observations to score.", name_str, run_date_id)
+            return {"anomaly_flag": FLAG.NO_DATA}
+
+        status_flags = {
+            "NO_DATA": FLAG.NO_DATA,
+            "FLAT": FLAG.FLAT_DATA,
+            "INSUFFICIENT": FLAG.INSUFFICIENT_DATA,
+        }
+        status = parameters["status"]
+        if status != "OK":
+            logger.warning("%s on %s has fitted parameter status %s.", name_str, run_date_id, status)
+            return {"anomaly_flag": status_flags.get(status, FLAG.NO_DATA)}
+
+        lower_bound = parameters["lower_bound"]
+        upper_bound = parameters["upper_bound"]
+        if lower_bound is None or upper_bound is None:
+            logger.error("%s on %s has OK parameters without bounds.", name_str, run_date_id)
+            return {"anomaly_flag": FLAG.NO_DATA}
+
+        interval_days = int(parameters["interval_days"])
+        anomaly_threshold = float(parameters["anomaly_threshold"])
+        # Keep the legacy output shape while making it explicit that the stored p10/p90
+        # bounds are the scoring band (there are no per-run p25/p75 calculations).
+        return_dict = {
+            "quantile_10": lower_bound,
+            "quantile_25": lower_bound,
+            "quantile_75": upper_bound,
+            "quantile_90": upper_bound,
+        }
 
         # isolate the most recent `interval_days` rows
         recent = value.sort_values(by=["date_id"], ascending=False).head(interval_days)
@@ -107,19 +109,15 @@ class RollingPercentileDetector(BaseDetector):
         else:
             # latest ship cnt != 0
             # count days whose ship_cnt falls outside [p10, p90]
-            if name_str == "霍尔木兹海峡":
-                quantile_25 = 15
-                quantile_75 = 25
-
             anomaly_cnt = 0
             for _, row in recent.iterrows():
-                if (row["ship_cnt"] < quantile_25) or (row["ship_cnt"] > quantile_75):
+                if (row["ship_cnt"] < lower_bound) or (row["ship_cnt"] > upper_bound):
                     anomaly_cnt += 1
 
             # flag as anomalous when the outlier ratio exceeds the threshold
             anomaly_ratio = anomaly_cnt / interval_days
-            anomaly_flag = FLAG.ANOMALY if anomaly_ratio > self.anomaly_percentage_threshold else FLAG.NORMAL
-        
+            anomaly_flag = FLAG.ANOMALY if anomaly_ratio > anomaly_threshold else FLAG.NORMAL
+
         return_dict["anomaly_ratio"] = anomaly_ratio
         return_dict["anomaly_flag"] = anomaly_flag
         return return_dict
