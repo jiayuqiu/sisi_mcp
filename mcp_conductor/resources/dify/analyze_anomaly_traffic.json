@@ -35,13 +35,20 @@
             "type": "string",
             "description": "通道名称",
             "example": "霍尔木兹海峡"
+          },
+          "location_type": {
+            "type": "string",
+            "enum": ["pipe", "port"],
+            "description": "地点类型：航运通道或港口",
+            "example": "pipe"
           }
         },
         "required": [
           "year",
           "month",
           "day",
-          "location"
+          "location",
+          "location_type"
         ]
       },
       "AnalyzeAnomalyRequest": {
@@ -49,11 +56,11 @@
         "additionalProperties": false,
         "properties": {
           "question": {
-            "description": "问题入参。推荐传 JSON 字符串：{\"year\",\"month\",\"day\",\"location\"}，与当前后端解析逻辑完全一致。",
+            "description": "问题入参。推荐传包含 year/month/day/location/location_type 的 JSON 字符串或对象。",
             "anyOf": [
               {
                 "type": "string",
-                "example": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
+                "example": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\",\"location_type\":\"pipe\"}"
               },
               {
                 "$ref": "#/components/schemas/AnalyzeAnomalyQuestionObject"
@@ -88,6 +95,10 @@
             "type": "string",
             "description": "通道名称",
             "example": "霍尔木兹海峡"
+          },
+          "location_type": {
+            "type": "string",
+            "enum": ["pipe", "port"]
           },
           "conclusion": {
             "type": "string",
@@ -166,6 +177,7 @@
           "result",
           "run_date",
           "pipe_name",
+          "location_type",
           "conclusion",
           "weather_factor",
           "political_factor",
@@ -222,7 +234,7 @@
                 "json_string_input": {
                   "summary": "推荐：JSON 字符串输入",
                   "value": {
-                    "question": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
+                    "question": "{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\",\"location_type\":\"pipe\"}"
                   }
                 }
               }
@@ -252,6 +264,7 @@
                       "result": "- 结论\n20260416日，霍尔木兹海峡发生交通异常\n\n- 天气因素\n西北风增强并伴随能见度下降，可能导致船舶通行效率下降。\n\n- 政治因素\n地区军事活动升级与临时海上管制风险上升，可能导致通航延误。",
                       "run_date": "2026-04-16",
                       "pipe_name": "霍尔木兹海峡",
+                      "location_type": "pipe",
                       "conclusion": "20260416日，霍尔木兹海峡通航量异常偏低",
                       "weather_factor": "西北风增强并伴随能见度下降，可能导致船舶通行效率下降。",
                       "political_factor": "地区军事活动升级与临时海上管制风险上升，可能导致通航延误。",

@@ -141,6 +141,7 @@ def _expand_factors(
 def analyze_congestion(
     pipe_name: str,
     run_date: str,
+    location_type: str = "pipe",
     direction: str = "UNKNOWN",
     ratio_low: float | None = None,
     ratio_high: float | None = None,
@@ -245,7 +246,14 @@ def analyze_congestion(
 
     response["choices"][0]["message"]["content"] = summary
 
-    save_to_log(response, payload=question, date_id=run_date_id, pipe_name=pipe_name, question_type="weather_news")
+    save_to_log(
+        response,
+        payload=question,
+        date_id=run_date_id,
+        pipe_name=pipe_name,
+        question_type="weather_news",
+        location_type=location_type,
+    )
     return {
         "summary": summary,
         "weather_factor": weather_factor,

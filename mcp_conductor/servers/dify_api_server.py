@@ -166,9 +166,18 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
     return run_date, pipe
 
 
-def parse_question_json(question: str | dict[str, object]) -> tuple[str | None, str | None]:
+def _normalize_location_type(value: object, location_name: object) -> str:
+    """Normalize an explicit type, with a suffix fallback for legacy callers."""
+    if value in {"pipe", "port"}:
+        return str(value)
+    return "port" if str(location_name).strip().endswith("港") else "pipe"
+
+
+def parse_question_json(
+    question: str | dict[str, object],
+) -> tuple[str | None, str | None, str | None]:
     if not question:
-        return None, None
+        return None, None, None
 
     structured_question = json.loads(question) if isinstance(question, str) else question
     # Zero-pad so unpadded values (e.g. month "4", day "6") don't corrupt date_id
@@ -178,7 +187,11 @@ def parse_question_json(question: str | dict[str, object]) -> tuple[str | None, 
         f"-{int(structured_question['day']):02d}"
     )
     pipe_name = structured_question["location"]
-    return run_date, pipe_name
+    location_type = _normalize_location_type(
+        structured_question.get("location_type"),
+        pipe_name,
+    )
+    return run_date, str(pipe_name), location_type
 
 
 def _pick_factor_sentence(text: str, keywords: list[str], fallback: str) -> str:
@@ -217,14 +230,20 @@ async def detect_anomaly(request: QuestionRequest):
         # Dify sends a structured JSON string, while direct API callers may use the
         # natural-language format documented by this endpoint.
         try:
-            run_date, pipe_name = parse_question_json(request.question)
+            run_date, pipe_name, location_type = parse_question_json(request.question)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             if isinstance(request.question, str):
                 run_date, pipe_name = parse_question(request.question)
+                location_type = _normalize_location_type(None, pipe_name)
             else:
-                run_date, pipe_name = None, None
-        logger.info(f"Detect anomaly parse_question: {run_date}, {pipe_name}")
-        if not run_date or not pipe_name:
+                run_date, pipe_name, location_type = None, None, None
+        logger.info(
+            "Detect anomaly parse_question: %s, %s, %s",
+            run_date,
+            location_type,
+            pipe_name,
+        )
+        if not run_date or not pipe_name or location_type not in {"pipe", "port"}:
             return {
                 "success": False,
                 "message": "无法解析问题。请确保包含年月和通道名称。示例：2023年12月 曼德海峡是否发生异常？"
@@ -260,12 +279,12 @@ async def detect_anomaly(request: QuestionRequest):
                 FROM 
                     vw_m_pipe_anomaly_roll_percentile 
                 WHERE 
-                    location_type = 'pipe' AND pipe_name = ? AND date_id = ?
+                    location_type = ? AND pipe_name = ? AND date_id = ?
                 """
             logger.debug(_sql)
             row = conn.execute(
                 _sql,
-                (pipe_name, date_id),
+                (location_type, pipe_name, date_id),
             ).fetchone()
 
         if row is None:
@@ -344,6 +363,7 @@ async def detect_anomaly(request: QuestionRequest):
             "result": result_text,
             "run_date": run_date,
             "pipe_name": pipe_name,
+            "location_type": location_type,
             "if_anomaly": route == "ANOMALY",
             "route": route,
             "anomaly_flag": anomaly_flag,
@@ -382,15 +402,20 @@ async def analyze_anomaly_reason(request: QuestionRequest):
 
         # Parse the question
         try:
-            run_date, pipe_name = parse_question_json(request.question)
+            run_date, pipe_name, location_type = parse_question_json(request.question)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             return {
                 "success": False,
                 "message": "无法解析问题。请传入 JSON 字符串：{\"year\",\"month\",\"day\",\"location\"}，"
                            "示例：{\"year\":\"2026\",\"month\":\"04\",\"day\":\"16\",\"location\":\"霍尔木兹海峡\"}"
             }
-        logger.info(f"analyze_anomaly_reason get {run_date} - {pipe_name}")
-        if not run_date or not pipe_name:
+        logger.info(
+            "analyze_anomaly_reason get %s - %s - %s",
+            run_date,
+            location_type,
+            pipe_name,
+        )
+        if not run_date or not pipe_name or location_type not in {"pipe", "port"}:
             return {
                 "success": False,
                 "message": "无法解析问题。请确保包含年月和通道名称。示例：请分析2023年12月曼德海峡异常的原因"
@@ -416,12 +441,12 @@ async def analyze_anomaly_reason(request: QuestionRequest):
                 FROM 
                     vw_m_pipe_anomaly_roll_percentile 
                 WHERE 
-                    location_type = 'pipe' AND pipe_name = ? AND date_id = ?
+                    location_type = ? AND pipe_name = ? AND date_id = ?
                 """
             logger.debug(_sql)
             row = conn.execute(
                 _sql,
-                (pipe_name, date_id),
+                (location_type, pipe_name, date_id),
             ).fetchone()
         
         if row is None:
@@ -454,6 +479,7 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         analysis = analyze_congestion(
             pipe_name,
             run_date,
+            location_type=location_type,
             direction=direction,
             ratio_low=ratio_low,
             ratio_high=ratio_high,
@@ -504,6 +530,7 @@ async def analyze_anomaly_reason(request: QuestionRequest):
             "result": result_text,
             "run_date": run_date,
             "pipe_name": pipe_name,
+            "location_type": location_type,
             "conclusion": conclusion,
             "weather_factor": weather_factor,
             "political_factor": political_factor,
@@ -540,8 +567,8 @@ async def save_worklog(request: SaverRequest):
             request.question_type, request.question,
         )
 
-        run_date, pipe_name = parse_question_json(request.question)
-        if not run_date or not pipe_name:
+        run_date, pipe_name, location_type = parse_question_json(request.question)
+        if not run_date or not pipe_name or location_type not in {"pipe", "port"}:
             return {
                 "success": False,
                 "message": "无法解析 question。需要包含 year/month/day/location 字段的 JSON。",
@@ -556,6 +583,7 @@ async def save_worklog(request: SaverRequest):
             payload=request.question,
             reasoning_content=request.reasoning_content or "",
             return_id=request.return_id,
+            location_type=location_type,
         )
 
         return {
@@ -563,6 +591,7 @@ async def save_worklog(request: SaverRequest):
             "return_id": return_id,
             "run_date": run_date,
             "pipe_name": pipe_name,
+            "location_type": location_type,
             "question_type": request.question_type,
         }
 

@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 
 interface LogEntry {
+  location_type: "pipe" | "port";
   return_id: string;
   question_type: string | null;
   date_id: number | null;
@@ -188,6 +189,7 @@ export default function WorkflowPortPage() {
       const params = new URLSearchParams({
         limit: String(PAGE_SIZE),
         offset: String(p * PAGE_SIZE),
+        location_type: "port",
       });
       if (pipe) params.set("pipe_name", pipe);
       if (start) params.set("start_date", start);

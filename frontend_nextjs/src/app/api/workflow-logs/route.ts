@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   const limit = Number(searchParams.get("limit") ?? "50");
   const offset = Number(searchParams.get("offset") ?? "0");
   const pipeName = searchParams.get("pipe_name") ?? "";
+  const locationType = searchParams.get("location_type") ?? "";
   const startDate = searchParams.get("start_date") ?? "";
   const endDate = searchParams.get("end_date") ?? "";
 
@@ -38,6 +39,10 @@ export async function GET(req: NextRequest) {
       conditions.push("pipe_name = ?");
       params.push(pipeName);
     }
+    if (locationType === "pipe" || locationType === "port") {
+      conditions.push("location_type = ?");
+      params.push(locationType);
+    }
     if (startDate) {
       conditions.push("date_id >= ?");
       params.push(toDateId(startDate));
@@ -55,7 +60,7 @@ export async function GET(req: NextRequest) {
 
     const logs = db
       .prepare(
-        `SELECT return_id, question_type, date_id, pipe_name, content, reasoning_content
+        `SELECT location_type, return_id, question_type, date_id, pipe_name, content, reasoning_content
          FROM log_agent_worklog ${where}
          ORDER BY date_id DESC, run_timestamp DESC LIMIT ? OFFSET ?`
       )

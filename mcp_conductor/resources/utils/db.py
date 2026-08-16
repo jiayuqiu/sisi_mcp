@@ -28,6 +28,7 @@ def save_to_log(
     date_id: int,
     pipe_name: str,
     question_type: str = "weather_news",
+    location_type: str = "pipe",
 ) -> None:
     """Persist a DeepSeek API response to log_agent_worklog."""
     try:
@@ -39,9 +40,20 @@ def save_to_log(
         conn = sqlite3.connect(str(DB_PATH))
         conn.execute(
             """INSERT OR REPLACE INTO log_agent_worklog
-               (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content),
+               (location_type, return_id, question_type, full_response, payload,
+                date_id, pipe_name, content, reasoning_content)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                location_type,
+                return_id,
+                question_type,
+                full_response,
+                payload,
+                date_id,
+                pipe_name,
+                content,
+                reasoning_content,
+            ),
         )
         conn.commit()
         conn.close()
@@ -58,6 +70,7 @@ def save_worklog_entry(
     payload: str = "",
     reasoning_content: str = "",
     return_id: str | None = None,
+    location_type: str = "pipe",
 ) -> str:
     """Persist a summary entry (e.g. from a Dify LLM node) to log_agent_worklog.
 
@@ -73,9 +86,20 @@ def save_worklog_entry(
         conn = sqlite3.connect(str(DB_PATH))
         conn.execute(
             """INSERT OR REPLACE INTO log_agent_worklog
-               (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (return_id, question_type, "", payload, date_id, pipe_name, content, reasoning_content),
+               (location_type, return_id, question_type, full_response, payload,
+                date_id, pipe_name, content, reasoning_content)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                location_type,
+                return_id,
+                question_type,
+                "",
+                payload,
+                date_id,
+                pipe_name,
+                content,
+                reasoning_content,
+            ),
         )
         conn.commit()
         conn.close()

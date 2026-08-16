@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS m_roll_percentile_monitor (
 
 SQL_CREATE_LOG_AGENT_WORKLOG = """
 CREATE TABLE IF NOT EXISTS log_agent_worklog (
+    location_type TEXT NOT NULL CHECK (location_type IN ('pipe', 'port')),
     return_id TEXT UNIQUE NOT NULL,
     question_type TEXT,
     full_response TEXT,
@@ -142,7 +143,7 @@ CREATE TABLE IF NOT EXISTS log_agent_worklog (
     run_timestamp TEXT DEFAULT (datetime('now')),
     content TEXT,
     reasoning_content TEXT,
-    PRIMARY KEY (pipe_name, date_id, run_timestamp)
+    PRIMARY KEY (location_type, pipe_name, date_id)
 );
 """
 
@@ -297,6 +298,99 @@ def _migrate_anomaly_result_identity(conn: sqlite3.Connection) -> None:
     conn.execute(f"DROP TABLE {table}_legacy_identity")
 
 
+def _migrate_agent_worklog_identity(conn: sqlite3.Connection) -> None:
+    """Key agent logs by location type, name, and date.
+
+    Legacy rows did not record location type. Infer it from the source catalogs,
+    but reject ambiguous names because choosing a type would corrupt the log.
+    When a legacy schema allowed multiple rows per name/date, retain the newest.
+    """
+    table = "log_agent_worklog"
+    table_info = list(conn.execute(f"PRAGMA table_info({table})"))
+    if not table_info:
+        conn.execute(SQL_CREATE_LOG_AGENT_WORKLOG)
+        return
+
+    primary_key = [
+        row[1]
+        for row in sorted((row for row in table_info if row[5]), key=lambda row: row[5])
+    ]
+    if primary_key == ["location_type", "pipe_name", "date_id"]:
+        return
+
+    legacy_columns = {row[1] for row in table_info}
+    unresolved_filter = (
+        "(r.location_type IS NULL OR r.location_type NOT IN ('pipe', 'port')) AND "
+        if "location_type" in legacy_columns
+        else ""
+    )
+    ambiguous = conn.execute(
+        f"""
+        SELECT DISTINCT r.pipe_name
+        FROM {table} r
+        JOIN ship_cnt_in_pipe p ON p.pipe_name = r.pipe_name
+        JOIN ship_cnt_in_port o ON o.port_name = r.pipe_name
+        WHERE {unresolved_filter} 1 = 1
+        LIMIT 1
+        """
+    ).fetchone()
+    if ambiguous:
+        raise ValueError(
+            "Cannot migrate agent logs because a legacy name exists as both "
+            f"pipe and port: {ambiguous[0]}"
+        )
+
+    inferred_type = """
+        CASE
+            WHEN EXISTS (
+                SELECT 1 FROM ship_cnt_in_port o WHERE o.port_name = r.pipe_name
+            ) THEN 'port'
+            ELSE 'pipe'
+        END
+    """
+    if "location_type" in legacy_columns:
+        inferred_type = (
+            "CASE WHEN r.location_type IN ('pipe', 'port') THEN r.location_type ELSE "
+            + inferred_type
+            + " END"
+        )
+
+    conn.execute(f"ALTER TABLE {table} RENAME TO {table}_legacy_identity")
+    conn.execute(SQL_CREATE_LOG_AGENT_WORKLOG)
+    conn.execute(
+        f"""
+        WITH ranked AS (
+            SELECT
+                {inferred_type} AS inferred_location_type,
+                r.return_id,
+                r.question_type,
+                r.full_response,
+                r.payload,
+                r.date_id,
+                r.pipe_name,
+                r.run_timestamp,
+                r.content,
+                r.reasoning_content,
+                ROW_NUMBER() OVER (
+                    PARTITION BY {inferred_type}, r.pipe_name, r.date_id
+                    ORDER BY COALESCE(r.run_timestamp, '') DESC, r.rowid DESC
+                ) AS recency_rank
+            FROM {table}_legacy_identity r
+        )
+        INSERT INTO {table} (
+            location_type, return_id, question_type, full_response, payload,
+            date_id, pipe_name, run_timestamp, content, reasoning_content
+        )
+        SELECT
+            inferred_location_type, return_id, question_type, full_response, payload,
+            date_id, pipe_name, run_timestamp, content, reasoning_content
+        FROM ranked
+        WHERE recency_rank = 1
+        """
+    )
+    conn.execute(f"DROP TABLE {table}_legacy_identity")
+
+
 def setup_schema() -> None:
     """Ensure the SQLite database and all required tables exist."""
     if not DB_PATH.exists():
@@ -340,6 +434,7 @@ def setup_schema() -> None:
         logger.info("Table dim_anomaly_flag: ready.")
 
         conn.execute(SQL_CREATE_LOG_AGENT_WORKLOG)
+        _migrate_agent_worklog_identity(conn)
         logger.info("Table log_agent_worklog: ready.")
 
         conn.execute(SQL_DROP_VW_M_PIPE_ANOMALY_ROLL_PERCENTILE)

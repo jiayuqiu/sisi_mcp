@@ -146,6 +146,34 @@ class TestDetectAnomaly(unittest.TestCase):
         assert data["if_anomaly"] is True
         assert "通行延误" in data["result"]
 
+    def test_port_detection_uses_explicit_location_type(self):
+        fake_row = (
+            0, "绿", "正常范围", 1.0, 1.0, 4.0, 4.0,
+            0.03, 0.01, 0.02, "NORMAL",
+            0, 1.0, 1.0, 2.0, 2.0, 0.03, 0.01, 0.02, "NORMAL", "OK",
+            "NORMAL",
+        )
+        with patch("mcp_conductor.servers.dify_api_server.sqlite3") as mock_sqlite:
+            mock_conn = MagicMock()
+            mock_conn.execute.return_value.fetchone.return_value = fake_row
+            mock_conn.__enter__ = lambda s: mock_conn
+            mock_conn.__exit__ = MagicMock(return_value=False)
+            mock_sqlite.connect.return_value = mock_conn
+
+            data = self.call_detect(
+                {
+                    "year": "2026",
+                    "month": "07",
+                    "day": "31",
+                    "location": "曼萨尼约港",
+                    "location_type": "port",
+                }
+            )
+
+        assert data["success"] is True
+        assert data["location_type"] == "port"
+        assert mock_conn.execute.call_args.args[1] == ("port", "曼萨尼约港", 20260731)
+
     def test_no_db_record(self):
         with patch("mcp_conductor.servers.dify_api_server.sqlite3") as mock_sqlite:
             mock_conn = MagicMock()
@@ -202,6 +230,7 @@ class TestDetectAnomaly(unittest.TestCase):
         mock_analyze.assert_called_once_with(
             "霍尔木兹海峡",
             "2026-04-16",
+            location_type="pipe",
             direction="LOW",
             ratio_low=0.6,
             ratio_high=0.1,

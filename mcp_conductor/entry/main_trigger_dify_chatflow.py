@@ -1,5 +1,5 @@
 """
-Trigger the sisi_expert_chat Dify chatflow for every pipe (pipe_name, date_id) row
+Trigger the sisi_expert_chat Dify chatflow for every location/date row
 in m_pipe_anomaly_roll_percentile within a date range, regardless of
 anomaly_flag.
 
@@ -68,9 +68,11 @@ def fetch_detection_targets(
     start_date: date,
     end_date: date,
     pipe_filter: str | None,
-) -> list[tuple[str, date]]:
+    location_type_filter: str = "all",
+    missing_only: bool = False,
+) -> list[tuple[str, str, date]]:
     """
-    Return every pipe (pipe_name, date) row from m_pipe_anomaly_roll_percentile
+    Return every (location_type, name, date) detection row
     whose date_id falls in [start_date, end_date], regardless of anomaly_flag.
     Optionally restricted to a single pipe_name.
     """
@@ -78,29 +80,41 @@ def fetch_detection_targets(
     end_id = int(end_date.strftime("%Y%m%d"))
 
     sql = """
-        SELECT pipe_name, date_id
-        FROM m_pipe_anomaly_roll_percentile
-        WHERE location_type = 'pipe'
-          AND date_id BETWEEN ? AND ?
+        SELECT r.location_type, r.pipe_name, r.date_id
+        FROM m_pipe_anomaly_roll_percentile r
+        WHERE r.date_id BETWEEN ? AND ?
     """
     params: list = [start_id, end_id]
+    if location_type_filter != "all":
+        sql += " AND r.location_type = ?"
+        params.append(location_type_filter)
     if pipe_filter:
-        sql += " AND pipe_name = ?"
+        sql += " AND r.pipe_name = ?"
         params.append(pipe_filter)
-    sql += " ORDER BY date_id, pipe_name"
+    if missing_only:
+        sql += """
+            AND NOT EXISTS (
+                SELECT 1
+                FROM log_agent_worklog l
+                WHERE l.location_type = r.location_type
+                  AND l.pipe_name = r.pipe_name
+                  AND l.date_id = r.date_id
+            )
+        """
+    sql += " ORDER BY r.date_id, r.location_type, r.pipe_name"
 
     with sqlite3.connect(str(DB_PATH)) as conn:
         rows = conn.execute(sql, params).fetchall()
 
-    results: list[tuple[str, date]] = []
-    for pipe_name, date_id in rows:
+    results: list[tuple[str, str, date]] = []
+    for location_type, pipe_name, date_id in rows:
         s = str(date_id)
         d = date(int(s[:4]), int(s[4:6]), int(s[6:8]))
-        results.append((pipe_name, d))
+        results.append((location_type, pipe_name, d))
     return results
 
 
-def build_query(pipe_name: str, run_date: date) -> str:
+def build_query(location_type: str, pipe_name: str, run_date: date) -> str:
     """
     Build the natural-language question sent to the Dify chatflow.
 
@@ -108,9 +122,11 @@ def build_query(pipe_name: str, run_date: date) -> str:
     the detect -> analyze path. Contains year/month/day/location per the LLM
     extraction schema in sisi_expert_chat.yml.
     """
+    location_label = "港口" if location_type == "port" else "航运通道"
     return (
         f"请分析{run_date.year}年{run_date.month}月{run_date.day}日"
-        f"{pipe_name}为什么会发生交通异常"
+        f"{location_label}{pipe_name}为什么会发生交通异常，"
+        f"地点类型为{location_type}"
     )
 
 
@@ -180,6 +196,8 @@ def run(
     timeout: float,
     retries: int = 2,
     retry_backoff: float = 2.0,
+    location_type_filter: str = "all",
+    missing_only: bool = False,
 ) -> None:
     if start_date > end_date:
         logger.error("start-date (%s) must be <= end-date (%s).", start_date, end_date)
@@ -189,10 +207,17 @@ def run(
         return
 
     logger.info("Date range: %s to %s (inclusive)", start_date, end_date)
+    logger.info("Location type: %s", location_type_filter)
     if pipe_filter:
         logger.info("Pipe filter: %s", pipe_filter)
 
-    targets = fetch_detection_targets(start_date, end_date, pipe_filter)
+    targets = fetch_detection_targets(
+        start_date,
+        end_date,
+        pipe_filter,
+        location_type_filter,
+        missing_only,
+    )
     logger.info(
         "Found %d row(s) in m_pipe_anomaly_roll_percentile for this range.",
         len(targets),
@@ -210,8 +235,14 @@ def run(
 
     if dry_run:
         logger.info("Dry run — previewing queries without calling Dify:")
-        for pipe, d in targets:
-            logger.info("  [%s] %s -> %s", pipe, d.isoformat(), build_query(pipe, d))
+        for location_type, pipe, d in targets:
+            logger.info(
+                "  [%s:%s] %s -> %s",
+                location_type,
+                pipe,
+                d.isoformat(),
+                build_query(location_type, pipe, d),
+            )
         return
 
     # Validate env vars only when actually calling Dify
@@ -227,9 +258,17 @@ def run(
     logger.info("Dify base URL: %s", base_url)
 
     succeeded, failed = 0, 0
-    for i, (pipe, d) in enumerate(targets, start=1):
-        query = build_query(pipe, d)
-        logger.info("[%d/%d] %s %s -> %s", i, total, pipe, d.isoformat(), query)
+    for i, (location_type, pipe, d) in enumerate(targets, start=1):
+        query = build_query(location_type, pipe, d)
+        logger.info(
+            "[%d/%d] %s:%s %s -> %s",
+            i,
+            total,
+            location_type,
+            pipe,
+            d.isoformat(),
+            query,
+        )
         try:
             resp = None
             for attempt in range(retries + 1):
@@ -265,7 +304,11 @@ def run(
             answer = resp.get("answer") or ""
             message_id = resp.get("message_id", "")
             date_id = int(d.strftime("%Y%m%d"))
-            return_id = f"dify-{message_id}" if message_id else f"dify-{pipe}-{date_id}"
+            return_id = (
+                f"dify-{message_id}"
+                if message_id
+                else f"dify-{location_type}-{pipe}-{date_id}"
+            )
             answer_preview = answer[:120].replace("\n", " ")
             logger.info(
                 "[%d/%d] OK message_id=%s answer=%s...",
@@ -276,9 +319,10 @@ def run(
                 with sqlite3.connect(str(DB_PATH)) as conn:
                     conn.execute(
                         """INSERT INTO log_agent_worklog
-                               (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
-                           VALUES (?, ?, '', ?, ?, ?, ?, '')
-                           ON CONFLICT(pipe_name, date_id) DO UPDATE SET
+                               (location_type, return_id, question_type, full_response,
+                                payload, date_id, pipe_name, content, reasoning_content)
+                           VALUES (?, ?, ?, '', ?, ?, ?, ?, '')
+                           ON CONFLICT(location_type, pipe_name, date_id) DO UPDATE SET
                                content = excluded.content,
                                return_id = excluded.return_id,
                                run_timestamp = datetime('now'),
@@ -294,16 +338,25 @@ def run(
                                END,
                                pipe_name = COALESCE(log_agent_worklog.pipe_name, excluded.pipe_name),
                                date_id = COALESCE(log_agent_worklog.date_id, excluded.date_id)""",
-                        (return_id, "dify_answer", query, date_id, pipe, answer),
+                        (
+                            location_type,
+                            return_id,
+                            "dify_answer",
+                            query,
+                            date_id,
+                            pipe,
+                            answer,
+                        ),
                     )
                     updated = conn.execute(
                         "SELECT changes()"
                     ).fetchone()[0]
                 if updated:
                     logger.info(
-                        "[%d/%d] Upserted content to DB for pipe=%s date_id=%s return_id=%s",
+                        "[%d/%d] Upserted content to DB for type=%s location=%s date_id=%s return_id=%s",
                         i,
                         total,
+                        location_type,
                         pipe,
                         date_id,
                         return_id,
@@ -344,8 +397,19 @@ def main() -> None:
         "--pipe",
         type=str,
         default=None,
-        help="Only trigger for this pipe_name (default: all pipes found in "
+        help="Only trigger for this location name (legacy option name; default: all locations in "
              "m_pipe_anomaly_roll_percentile for the date range).",
+    )
+    parser.add_argument(
+        "--location-type",
+        choices=("pipe", "port", "all"),
+        default="all",
+        help="Process pipes, ports, or both (default: all).",
+    )
+    parser.add_argument(
+        "--missing-only",
+        action="store_true",
+        help="Only process detection rows that do not already have a typed agent log.",
     )
     parser.add_argument(
         "--dry-run",
@@ -406,6 +470,8 @@ def main() -> None:
         timeout=args.timeout,
         retries=args.retries,
         retry_backoff=args.retry_backoff,
+        location_type_filter=args.location_type,
+        missing_only=args.missing_only,
     )
 
 

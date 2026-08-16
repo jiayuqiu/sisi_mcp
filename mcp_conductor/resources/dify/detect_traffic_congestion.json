@@ -37,9 +37,13 @@
                           "year": {"type": "string"},
                           "month": {"type": "string"},
                           "day": {"type": "string"},
-                          "location": {"type": "string"}
+                          "location": {"type": "string"},
+                          "location_type": {
+                            "type": "string",
+                            "enum": ["pipe", "port"]
+                          }
                         },
-                        "required": ["year", "month", "day", "location"]
+                        "required": ["year", "month", "day", "location", "location_type"]
                       }
                     ]
                   }
@@ -68,6 +72,10 @@
                     },
                     "pipe_name": {
                       "type": "string"
+                    },
+                    "location_type": {
+                      "type": "string",
+                      "enum": ["pipe", "port"]
                     },
                     "if_anomaly": {
                       "type": "boolean",

@@ -309,13 +309,15 @@ workflow:
             - 月份（month）
             - 日期（day）；如果没有具体日期，使用当月最后一天
             - 地点或通道名称（location）
+            - 地点类型（location_type）：海峡/运河/航运通道使用 pipe，港口使用 port
 
             只返回结构化字段，不要补充解释。示例：
             {
               "year": "2026",
               "month": "07",
               "day": "21",
-              "location": "英吉利海峡"
+              "location": "英吉利海峡",
+              "location_type": "pipe"
             }
         - id: d69decd2-29c6-47dd-8690-0634e8d3a35a
           role: user
@@ -329,7 +331,13 @@ workflow:
                 description: 日期,格式DD
                 type: string
               location:
-                description: 通道名称，如曼德海峡或马六甲海峡
+                description: 通道或港口名称，如曼德海峡、马六甲海峡或曼萨尼约港
+                type: string
+              location_type:
+                description: 地点类型；海峡、运河或航运通道为 pipe，港口为 port
+                enum:
+                - pipe
+                - port
                 type: string
               month:
                 description: 月份，格式MM或M
@@ -342,6 +350,7 @@ workflow:
             - month
             - day
             - location
+            - location_type
             type: object
         structured_output_enabled: true
         title: LLM
@@ -469,6 +478,7 @@ workflow:
                   "result": result.get("result", ""),
                   "run_date": result.get("run_date", ""),
                   "pipe_name": result.get("pipe_name", ""),
+                  "location_type": result.get("location_type", "pipe"),
                   "if_anomaly": result.get("if_anomaly", False),
                   "route": result.get("route", "DATA_ISSUE"),
                   "anomaly_flag": number("anomaly_flag", -1),
@@ -542,6 +552,9 @@ workflow:
             children: null
             type: boolean
           pipe_name:
+            children: null
+            type: string
+          location_type:
             children: null
             type: string
           quantile_10:
@@ -650,11 +663,11 @@ workflow:
     - data:
         classes:
         - id: '1'
-          name: 用户想知道某日某通道的通航量、通行时长或综合交通状态是否异常，例如“2026年7月21日英吉利海峡有没有异常？”
+          name: 用户想知道某日某航运通道或港口的通航量、通行时长或综合交通状态是否异常，例如“2026年7月21日英吉利海峡有没有异常？”或“2026年7月21日曼萨尼约港有没有异常？”
         - id: '2'
-          name: 用户想了解通航量异常、通行延误、拥堵、封锁、绕行或其他综合异常状态发生的原因
+          name: 用户想了解航运通道或港口的通航量异常、通行延误、拥堵、封锁、绕行或其他综合异常状态发生的原因
         - id: '1771638544243'
-          name: 与海峡交通无关的问题，或者打招呼
+          name: 与航运通道或港口交通无关的问题，或者打招呼
         instructions: ''
         model:
           completion_params:
@@ -709,7 +722,7 @@ workflow:
         prompt_template:
         - id: dc6ce8f5-0251-4044-a6fb-634914f92a4e
           role: system
-          text: '你是一个专注于全球主要海峡和航运通道交通异常分析的专家助手。
+          text: '你是一个专注于全球主要海峡、航运通道和港口交通异常分析的专家助手。
 
             你回答与船舶通航量、通行时长、拥堵、延误、绕行、封锁及相关原因分析有关的问题。
 

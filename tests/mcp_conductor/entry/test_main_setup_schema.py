@@ -105,10 +105,22 @@ def test_setup_schema_migrates_existing_anomaly_table(tmp_path, monkeypatch):
             FROM m_pipe_anomaly_roll_percentile
             """
         ).fetchone()
+        log_primary_key = [
+            row[1]
+            for row in sorted(
+                (
+                    row
+                    for row in conn.execute("PRAGMA table_info(log_agent_worklog)")
+                    if row[5]
+                ),
+                key=lambda row: row[5],
+            )
+        ]
 
     assert columns["location_type"] == "TEXT"
     assert pipe_columns["duration"] == "REAL"
     assert primary_key == ["location_type", "pipe_name", "date_id"]
+    assert log_primary_key == ["location_type", "pipe_name", "date_id"]
     assert migrated == ("port", "legacy_port", 20260701, 1, 0.5)
     assert columns["ratio_low"] == "REAL"
     assert columns["ratio_high"] == "REAL"
@@ -190,6 +202,55 @@ def test_setup_schema_is_idempotent_with_direction_columns(tmp_path, monkeypatch
         "ratio_high",
         "ratio_low",
         "regime",
+    ]
+
+
+def test_setup_schema_migrates_legacy_agent_logs_to_location_type(tmp_path, monkeypatch):
+    db_path = tmp_path / "legacy-logs.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE ship_cnt_in_pipe (pipe_name TEXT, date_id INTEGER)")
+        conn.execute("CREATE TABLE ship_cnt_in_port (port_name TEXT, date_id INTEGER)")
+        conn.execute("INSERT INTO ship_cnt_in_pipe VALUES ('Test Strait', 20260731)")
+        conn.execute("INSERT INTO ship_cnt_in_port VALUES ('Test Port', 20260731)")
+        conn.execute(
+            """
+            CREATE TABLE log_agent_worklog (
+                return_id TEXT UNIQUE NOT NULL,
+                question_type TEXT,
+                full_response TEXT,
+                payload TEXT,
+                date_id INT,
+                pipe_name TEXT,
+                run_timestamp TEXT,
+                content TEXT,
+                reasoning_content TEXT,
+                PRIMARY KEY (pipe_name, date_id)
+            )
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO log_agent_worklog
+                (return_id, date_id, pipe_name, run_timestamp, content)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                ("pipe-log", 20260731, "Test Strait", "2026-08-01 00:00:00", "pipe"),
+                ("port-log", 20260731, "Test Port", "2026-08-01 00:00:00", "port"),
+            ],
+        )
+
+    monkeypatch.setattr(schema, "DB_PATH", db_path)
+    schema.setup_schema()
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT location_type, pipe_name, content FROM log_agent_worklog ORDER BY location_type"
+        ).fetchall()
+
+    assert rows == [
+        ("pipe", "Test Strait", "pipe"),
+        ("port", "Test Port", "port"),
     ]
 
 

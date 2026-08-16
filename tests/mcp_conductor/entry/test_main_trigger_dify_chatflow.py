@@ -27,6 +27,7 @@ def _init_test_db(db_path: Path) -> None:
     conn.execute(
         """
         CREATE TABLE log_agent_worklog (
+            location_type TEXT NOT NULL,
             return_id TEXT UNIQUE NOT NULL,
             question_type TEXT,
             full_response TEXT,
@@ -36,7 +37,7 @@ def _init_test_db(db_path: Path) -> None:
             run_timestamp TEXT DEFAULT (datetime('now')),
             content TEXT,
             reasoning_content TEXT,
-            PRIMARY KEY (pipe_name, date_id)
+            PRIMARY KEY (location_type, pipe_name, date_id)
         )
         """
     )
@@ -85,6 +86,7 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
                 sleep=0,
                 user="test-user",
                 timeout=5.0,
+                location_type_filter="pipe",
             )
 
         conn = sqlite3.connect(str(self.db_path))
@@ -92,7 +94,7 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
             """
             SELECT return_id, question_type, date_id, pipe_name, content
             FROM log_agent_worklog
-            WHERE pipe_name = ? AND date_id = ?
+            WHERE location_type = 'pipe' AND pipe_name = ? AND date_id = ?
             """,
             ("霍尔木兹海峡", 20260415),
         ).fetchone()
@@ -113,10 +115,11 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
         conn.execute(
             """
             INSERT INTO log_agent_worklog
-            (return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (location_type, return_id, question_type, full_response, payload, date_id, pipe_name, content, reasoning_content)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                "pipe",
                 "old-return-id",
                 "weather_news",
                 "",
@@ -149,6 +152,7 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
                 sleep=0,
                 user="test-user",
                 timeout=5.0,
+                location_type_filter="pipe",
             )
 
         conn = sqlite3.connect(str(self.db_path))
@@ -156,7 +160,7 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
             """
             SELECT return_id, question_type, payload, content
             FROM log_agent_worklog
-            WHERE pipe_name = ? AND date_id = ?
+            WHERE location_type = 'pipe' AND pipe_name = ? AND date_id = ?
             """,
             ("霍尔木兹海峡", 20260415),
         ).fetchone()
@@ -200,15 +204,67 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
                 timeout=5.0,
                 retries=1,
                 retry_backoff=0,
+                location_type_filter="pipe",
             )
 
         assert mock_call.call_count == 2
         with sqlite3.connect(str(self.db_path)) as conn:
             row = conn.execute(
-                "SELECT content FROM log_agent_worklog WHERE pipe_name = ? AND date_id = ?",
+                "SELECT content FROM log_agent_worklog WHERE location_type = 'pipe' AND pipe_name = ? AND date_id = ?",
                 ("霍尔木兹海峡", 20260415),
             ).fetchone()
         assert row == ("answer after retry",)
+
+    @patch.object(trigger, "call_dify_chatflow")
+    def test_all_location_types_are_logged_separately(self, mock_call):
+        mock_call.side_effect = [
+            {"answer": "pipe answer", "message_id": "pipe-message"},
+            {"answer": "port answer", "message_id": "port-message"},
+        ]
+
+        with patch.object(trigger, "DB_PATH", self.db_path), patch.dict(
+            os.environ,
+            {"DIFY_API_KEY": "dummy", "DIFY_CHATFLOW_URL": "http://example/v1"},
+            clear=False,
+        ):
+            trigger.run(
+                start_date=date(2026, 4, 15),
+                end_date=date(2026, 4, 15),
+                pipe_filter="霍尔木兹海峡",
+                dry_run=False,
+                limit=None,
+                sleep=0,
+                user="test-user",
+                timeout=5.0,
+                location_type_filter="all",
+            )
+
+        with sqlite3.connect(str(self.db_path)) as conn:
+            rows = conn.execute(
+                "SELECT location_type, content FROM log_agent_worklog ORDER BY location_type"
+            ).fetchall()
+        assert rows == [("pipe", "pipe answer"), ("port", "port answer")]
+
+    def test_missing_only_excludes_existing_typed_log(self):
+        with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute(
+                """
+                INSERT INTO log_agent_worklog
+                    (location_type, return_id, date_id, pipe_name, content)
+                VALUES ('pipe', 'existing-pipe', 20260415, '霍尔木兹海峡', 'done')
+                """
+            )
+
+        with patch.object(trigger, "DB_PATH", self.db_path):
+            targets = trigger.fetch_detection_targets(
+                date(2026, 4, 15),
+                date(2026, 4, 15),
+                "霍尔木兹海峡",
+                location_type_filter="all",
+                missing_only=True,
+            )
+
+        assert targets == [("port", "霍尔木兹海峡", date(2026, 4, 15))]
 
     @unittest.skip("skip. only trigger in developing.")
     def test_call_dify_chatflow(self):
