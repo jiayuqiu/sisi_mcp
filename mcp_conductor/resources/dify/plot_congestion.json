@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://host.docker.internal:8002"
+      "url": "http://sisimcp-dify-api:8002"
     }
   ],
   "paths": {

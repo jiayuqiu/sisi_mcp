@@ -2,12 +2,12 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Ask Traffic Question",
-    "description": "分析交通异常原因，结合天气、新闻等信息",
-    "version": "1.0.0"
+    "description": "根据通航量、通行时长和综合状态分析交通异常原因",
+    "version": "1.1.0"
   },
   "servers": [
     {
-      "url": "http://host.docker.internal:8002"
+      "url": "http://sisimcp-dify-api:8002"
     }
   ],
   "components": {
@@ -100,6 +100,65 @@
           "political_factor": {
             "type": "string",
             "description": "政治/安全因素分析"
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["NORMAL", "LOW", "HIGH", "MIXED", "UNKNOWN"],
+            "description": "船舶通航量异常方向"
+          },
+          "ratio_low": {
+            "type": ["number", "null"],
+            "description": "低于正常下界的天数占比"
+          },
+          "ratio_high": {
+            "type": ["number", "null"],
+            "description": "高于正常上界的天数占比"
+          },
+          "anomaly_ratio": {
+            "type": ["number", "null"],
+            "description": "兼容字段：低位和高位异常天数的合计比率"
+          },
+          "anomaly_flag": {
+            "type": "integer",
+            "description": "通航量检测标识"
+          },
+          "duration_anomaly_flag": {
+            "type": ["integer", "null"],
+            "description": "通行时长检测标识"
+          },
+          "duration_anomaly_ratio": {
+            "type": ["number", "null"]
+          },
+          "duration_ratio_low": {
+            "type": ["number", "null"]
+          },
+          "duration_ratio_high": {
+            "type": ["number", "null"]
+          },
+          "duration_direction": {
+            "type": "string",
+            "enum": ["NORMAL", "LOW", "HIGH", "MIXED", "UNKNOWN"]
+          },
+          "duration_status": {
+            "type": "string"
+          },
+          "regime": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "AVOIDANCE",
+              "BLOCKAGE",
+              "CONGESTION",
+              "HIGH_THROUGHPUT",
+              "TRAFFIC_SURGE",
+              "LOW_TRAFFIC",
+              "DELAY",
+              "FAST_TRANSIT",
+              "VOLATILE",
+              "COUNT_NORMAL",
+              "DURATION_NORMAL",
+              "UNKNOWN"
+            ]
           }
         },
         "required": [
@@ -109,7 +168,19 @@
           "pipe_name",
           "conclusion",
           "weather_factor",
-          "political_factor"
+          "political_factor",
+          "direction",
+          "ratio_low",
+          "ratio_high",
+          "anomaly_ratio",
+          "anomaly_flag",
+          "duration_anomaly_flag",
+          "duration_anomaly_ratio",
+          "duration_ratio_low",
+          "duration_ratio_high",
+          "duration_direction",
+          "duration_status",
+          "regime"
         ]
       },
       "AnalyzeAnomalyErrorResponse": {
@@ -181,9 +252,21 @@
                       "result": "- 结论\n20260416日，霍尔木兹海峡发生交通异常\n\n- 天气因素\n西北风增强并伴随能见度下降，可能导致船舶通行效率下降。\n\n- 政治因素\n地区军事活动升级与临时海上管制风险上升，可能导致通航延误。",
                       "run_date": "2026-04-16",
                       "pipe_name": "霍尔木兹海峡",
-                      "conclusion": "20260416日，霍尔木兹海峡发生交通异常",
+                      "conclusion": "20260416日，霍尔木兹海峡通航量异常偏低",
                       "weather_factor": "西北风增强并伴随能见度下降，可能导致船舶通行效率下降。",
-                      "political_factor": "地区军事活动升级与临时海上管制风险上升，可能导致通航延误。"
+                      "political_factor": "地区军事活动升级与临时海上管制风险上升，可能导致通航延误。",
+                      "direction": "LOW",
+                      "ratio_low": 0.6,
+                      "ratio_high": 0.1,
+                      "anomaly_ratio": 0.7,
+                      "anomaly_flag": 1,
+                      "duration_anomaly_flag": 1,
+                      "duration_anomaly_ratio": 0.5,
+                      "duration_ratio_low": 0.0,
+                      "duration_ratio_high": 0.5,
+                      "duration_direction": "HIGH",
+                      "duration_status": "OK",
+                      "regime": "BLOCKAGE"
                     }
                   },
                   "error_example": {

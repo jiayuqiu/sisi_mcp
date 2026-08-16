@@ -12,6 +12,7 @@ def test_fit_model_orchestrates_every_location_type_and_metric():
             recent_records=90,
             as_of_date_id=20260701,
             fit_start=20250101,
+            holdout_records=30,
             persist=False,
         )
 
@@ -29,6 +30,7 @@ def test_fit_model_orchestrates_every_location_type_and_metric():
             as_of_date_id=20260701,
             fit_start=20250101,
             persist=False,
+            holdout_records=30,
         )
         for location_type in ("pipe", "port")
         for metric in ("ship_cnt", "duration")
@@ -46,6 +48,7 @@ def test_main_maps_dry_run_to_non_persistent_fit():
                 "--recent_records", "90",
                 "--as_of", "20260701",
                 "--fit_start", "20250101",
+                "--holdout_records", "40",
             ]
         )
 
@@ -57,4 +60,5 @@ def test_main_maps_dry_run_to_non_persistent_fit():
         location_type="port",
         metric="duration",
         persist=False,
+        holdout_records=40,
     )

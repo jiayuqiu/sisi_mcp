@@ -18,6 +18,7 @@ import pandas as pd
 from mcp_conductor.resources.utils.db import get_engine
 from mcp_conductor.resources.utils.logger import get_logger
 from mcp_conductor.detector.detect_engine import rp_detect_engine
+from mcp_conductor.detector.roll_percentile.monitor import monitor_roll_percentile
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
 from mcp_conductor.templates.questions import (
     ENRICH_ANOMALY_FACTORS,
@@ -97,6 +98,13 @@ def _expand_factors(
     ds_client: DeepSeekClient,
     run_date_id: int,
     pipe_name: str,
+    direction: str,
+    ratio_low: float | None,
+    ratio_high: float | None,
+    duration_direction: str,
+    duration_ratio_low: float | None,
+    duration_ratio_high: float | None,
+    regime: str,
     summary: str,
     weather_factor: str,
     political_factor: str,
@@ -105,6 +113,13 @@ def _expand_factors(
     prompt = ENRICH_ANOMALY_FACTORS.format(
         date_id=run_date_id,
         pipe_name=pipe_name,
+        direction=direction,
+        ratio_low=ratio_low,
+        ratio_high=ratio_high,
+        duration_direction=duration_direction,
+        duration_ratio_low=duration_ratio_low,
+        duration_ratio_high=duration_ratio_high,
+        regime=regime,
         summary=summary,
         weather_factor=weather_factor or "",
         political_factor=political_factor or "",
@@ -123,17 +138,49 @@ def _expand_factors(
     return w, p
 
 
-def analyze_congestion(pipe_name: str, run_date: str) -> dict[str, str]:
+def analyze_congestion(
+    pipe_name: str,
+    run_date: str,
+    direction: str = "UNKNOWN",
+    ratio_low: float | None = None,
+    ratio_high: float | None = None,
+    duration_direction: str = "UNKNOWN",
+    duration_ratio_low: float | None = None,
+    duration_ratio_high: float | None = None,
+    regime: str = "UNKNOWN",
+) -> dict[str, str]:
     """Query DeepSeek for weather/news context on the anomaly date."""
     run_date_id = int(run_date.replace("-", ""))
-    ds_client = DeepSeekClient()
+    # The reports need concise evidence, not a long reasoning trace. Disabling
+    # thinking keeps the custom-tool call comfortably inside Dify's timeout.
+    ds_client = DeepSeekClient(return_thinking=False)
 
     run_date_obj = datetime.strptime(run_date, "%Y-%m-%d").date()
     today = datetime.now(timezone.utc).date()
     if run_date_obj > today:
-        question = WEB_SEARCH_WEATHER_NEWS_WITH_EVIDENCE.format(date_id=run_date_id, pipe_name=pipe_name)
+        question = WEB_SEARCH_WEATHER_NEWS_WITH_EVIDENCE.format(
+            date_id=run_date_id,
+            pipe_name=pipe_name,
+            direction=direction,
+            ratio_low=ratio_low,
+            ratio_high=ratio_high,
+            duration_direction=duration_direction,
+            duration_ratio_low=duration_ratio_low,
+            duration_ratio_high=duration_ratio_high,
+            regime=regime,
+        )
     else:
-        question = WEB_SEARCH_WEATHER_NEWS_STRUCTURED.format(date_id=run_date_id, pipe_name=pipe_name)
+        question = WEB_SEARCH_WEATHER_NEWS_STRUCTURED.format(
+            date_id=run_date_id,
+            pipe_name=pipe_name,
+            direction=direction,
+            ratio_low=ratio_low,
+            ratio_high=ratio_high,
+            duration_direction=duration_direction,
+            duration_ratio_low=duration_ratio_low,
+            duration_ratio_high=duration_ratio_high,
+            regime=regime,
+        )
 
     response = ds_client.search_and_ask(question=question)
     logger.info("DeepSeek response: %s", response)
@@ -146,7 +193,17 @@ def analyze_congestion(pipe_name: str, run_date: str) -> dict[str, str]:
 
     # Retry once when the first answer has no usable evidence.
     if not _has_valid_sources(parsed):
-        retry_question = WEB_SEARCH_WEATHER_NEWS_RETRY.format(date_id=run_date_id, pipe_name=pipe_name)
+        retry_question = WEB_SEARCH_WEATHER_NEWS_RETRY.format(
+            date_id=run_date_id,
+            pipe_name=pipe_name,
+            direction=direction,
+            ratio_low=ratio_low,
+            ratio_high=ratio_high,
+            duration_direction=duration_direction,
+            duration_ratio_low=duration_ratio_low,
+            duration_ratio_high=duration_ratio_high,
+            regime=regime,
+        )
         retry_response = ds_client.search_and_ask(question=retry_question)
         logger.info("DeepSeek retry response: %s", retry_response)
         retry_message = retry_response["choices"][0]["message"]
@@ -173,6 +230,13 @@ def analyze_congestion(pipe_name: str, run_date: str) -> dict[str, str]:
             ds_client=ds_client,
             run_date_id=run_date_id,
             pipe_name=pipe_name,
+            direction=direction,
+            ratio_low=ratio_low,
+            ratio_high=ratio_high,
+            duration_direction=duration_direction,
+            duration_ratio_low=duration_ratio_low,
+            duration_ratio_high=duration_ratio_high,
+            regime=regime,
             summary=summary,
             weather_factor=weather_factor,
             political_factor=political_factor,
@@ -200,8 +264,8 @@ def save_anomaly_results(app_anomaly_results: dict) -> None:
     overwrites the previous result.
 
     Args:
-        app_anomaly_results: output of pipe_detect_engine — list of dicts with
-                           keys pipe_name, run_date_id, anomaly_flag.
+        app_anomaly_results: output of pipe_detect_engine — location results including
+                           the legacy anomaly ratio and directional count ratios.
     """
     updated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -219,10 +283,18 @@ def save_anomaly_results(app_anomaly_results: dict) -> None:
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO m_pipe_anomaly_roll_percentile
-                            (pipe_name, date_id, anomaly_flag, quantile_10, quantile_25, quantile_75, quantile_90, anomaly_ratio, updated_timestamp_utc)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (location_type, pipe_name, date_id, anomaly_flag, quantile_10, quantile_25,
+                             quantile_75, quantile_90, anomaly_ratio, ratio_low,
+                             ratio_high, direction, duration_anomaly_flag,
+                             duration_quantile_10, duration_quantile_25,
+                             duration_quantile_75, duration_quantile_90,
+                             duration_anomaly_ratio, duration_ratio_low,
+                             duration_ratio_high, duration_direction, duration_status,
+                             regime, updated_timestamp_utc)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
+                            app_type,
                             row[app_type],
                             row["run_date_id"],
                             int(row["anomaly_flag"]),
@@ -231,6 +303,20 @@ def save_anomaly_results(app_anomaly_results: dict) -> None:
                             row["quantile_75"],
                             row["quantile_90"],
                             row["anomaly_ratio"],
+                            row["ratio_low"],
+                            row["ratio_high"],
+                            row["direction"],
+                            row.get("duration_anomaly_flag"),
+                            row.get("duration_quantile_10"),
+                            row.get("duration_quantile_25"),
+                            row.get("duration_quantile_75"),
+                            row.get("duration_quantile_90"),
+                            row.get("duration_anomaly_ratio"),
+                            row.get("duration_ratio_low"),
+                            row.get("duration_ratio_high"),
+                            row.get("duration_direction"),
+                            row.get("duration_status"),
+                            row.get("regime"),
                             updated_at,
                         ),
                     )
@@ -255,6 +341,14 @@ def traffic_detect(run_date: str) -> None:
     # persist results
     # TODO: add check app_anomaly_list before save the results to sqlite
     save_anomaly_results(app_anomaly_list)
+
+    # Monitoring runs after persistence so the snapshot always includes this date's
+    # corrected-threshold results. Re-running the date updates the same snapshot.
+    monitor_roll_percentile(
+        db_path=DB_PATH,
+        end_date_id=run_date,
+        persist=True,
+    )
 
 
 if __name__ == "__main__":

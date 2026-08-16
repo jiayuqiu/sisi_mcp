@@ -1,5 +1,5 @@
 """
-Trigger the sisi_expert_chat Dify chatflow for every (pipe_name, date_id) row
+Trigger the sisi_expert_chat Dify chatflow for every pipe (pipe_name, date_id) row
 in m_pipe_anomaly_roll_percentile within a date range, regardless of
 anomaly_flag.
 
@@ -10,15 +10,15 @@ Chatflow routing summary (see mcp_conductor/resources/dify/sisi_expert_chat.yml)
                 class 2 ("为什么异常") ─┴─> llm (year/month/day/location extract)
                                               -> detectAnomaly tool
                                               -> Parse & To Json Obj
-                                              -> IF/ELSE on anomaly_flag
-                                                   = 1 -> analyzeAnomalyReason  (** writes log_agent_worklog **)
-                                                   = 0 -> NORMALSUMMARY         (no log write)
-                                                   = 2,3,4,else -> DATAISSUESUMMARY (no log write)
+                                              -> IF/ELSE on combined route
+                                                   ANOMALY -> analyzeAnomalyReason (** writes log_agent_worklog **)
+                                                   NORMAL -> NORMALSUMMARY       (no log write)
+                                                   PARTIAL_DATA/DATA_ISSUE -> DATAISSUESUMMARY (no log write)
                 class 3 ("unrelated") -> other-chatbot-stream (no detect/log)
 
-Note: only anomaly_flag = 1 rows actually populate log_agent_worklog (via the
-analyzeAnomalyReason branch). Other flags exercise the summary branches but do
-not write to the log table.
+Note: every combined anomaly regime populates log_agent_worklog through the
+analyzeAnomalyReason branch, including duration-only anomalies such as DELAY.
+Normal and incomplete-data routes exercise summary branches without a log write.
 
 Usage:
     # Dry-run over a date range
@@ -70,7 +70,7 @@ def fetch_detection_targets(
     pipe_filter: str | None,
 ) -> list[tuple[str, date]]:
     """
-    Return every (pipe_name, date) row from m_pipe_anomaly_roll_percentile
+    Return every pipe (pipe_name, date) row from m_pipe_anomaly_roll_percentile
     whose date_id falls in [start_date, end_date], regardless of anomaly_flag.
     Optionally restricted to a single pipe_name.
     """
@@ -80,7 +80,8 @@ def fetch_detection_targets(
     sql = """
         SELECT pipe_name, date_id
         FROM m_pipe_anomaly_roll_percentile
-        WHERE date_id BETWEEN ? AND ?
+        WHERE location_type = 'pipe'
+          AND date_id BETWEEN ? AND ?
     """
     params: list = [start_id, end_id]
     if pipe_filter:
@@ -155,6 +156,19 @@ def parse_iso_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
+def is_retryable_dify_error(error: requests.exceptions.RequestException) -> bool:
+    """Return whether a failed chatflow call is safe to retry."""
+    if isinstance(error, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+        return True
+
+    response = getattr(error, "response", None)
+    if response is None:
+        return False
+    if response.status_code == 429 or response.status_code >= 500:
+        return True
+    return response.status_code == 400 and "timed out" in (response.text or "").lower()
+
+
 def run(
     start_date: date,
     end_date: date,
@@ -164,6 +178,8 @@ def run(
     sleep: float,
     user: str,
     timeout: float,
+    retries: int = 2,
+    retry_backoff: float = 2.0,
 ) -> None:
     if start_date > end_date:
         logger.error("start-date (%s) must be <= end-date (%s).", start_date, end_date)
@@ -215,13 +231,37 @@ def run(
         query = build_query(pipe, d)
         logger.info("[%d/%d] %s %s -> %s", i, total, pipe, d.isoformat(), query)
         try:
-            resp = call_dify_chatflow(
-                query=query,
-                api_key=api_key,
-                base_url=base_url,
-                user=user,
-                timeout=timeout,
-            )
+            resp = None
+            for attempt in range(retries + 1):
+                try:
+                    resp = call_dify_chatflow(
+                        query=query,
+                        api_key=api_key,
+                        base_url=base_url,
+                        user=user,
+                        timeout=timeout,
+                    )
+                    break
+                except requests.exceptions.RequestException as error:
+                    if attempt >= retries or not is_retryable_dify_error(error):
+                        raise
+                    delay = retry_backoff * (2**attempt)
+                    logger.warning(
+                        "[%d/%d] RETRY %d/%d %s %s after %.1fs: %s",
+                        i,
+                        total,
+                        attempt + 1,
+                        retries,
+                        pipe,
+                        d.isoformat(),
+                        delay,
+                        error,
+                    )
+                    if delay > 0:
+                        time.sleep(delay)
+
+            if resp is None:
+                raise RuntimeError("Dify call finished without a response")
             answer = resp.get("answer") or ""
             message_id = resp.get("message_id", "")
             date_id = int(d.strftime("%Y%m%d"))
@@ -336,7 +376,24 @@ def main() -> None:
         default=180.0,
         help="Per-request HTTP timeout in seconds (default: 180).",
     )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=2,
+        help="Retries for timeouts, connection errors, HTTP 429, and HTTP 5xx (default: 2).",
+    )
+    parser.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=2.0,
+        help="Initial retry delay in seconds; doubles after each retry (default: 2).",
+    )
     args = parser.parse_args()
+
+    if args.retries < 0:
+        parser.error("--retries must be zero or greater")
+    if args.retry_backoff < 0:
+        parser.error("--retry-backoff must be zero or greater")
 
     run(
         start_date=parse_iso_date(args.start_date),
@@ -347,6 +404,8 @@ def main() -> None:
         sleep=args.sleep,
         user=args.user,
         timeout=args.timeout,
+        retries=args.retries,
+        retry_backoff=args.retry_backoff,
     )
 
 

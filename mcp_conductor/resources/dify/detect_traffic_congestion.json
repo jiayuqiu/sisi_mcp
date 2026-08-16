@@ -2,19 +2,19 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Detect Traffic Congestion",
-    "description": "检测指定日期和通道是否发生交通异常",
-    "version": "1.0.0"
+    "description": "基于船舶通航量与通行时长检测指定日期和通道的交通异常",
+    "version": "1.1.0"
   },
   "servers": [
     {
-      "url": "http://host.docker.internal:8002"
+      "url": "http://sisimcp-dify-api:8002"
     }
   ],
   "paths": {
     "/api/detect_anomaly": {
       "post": {
         "summary": "检测交通异常",
-        "description": "检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡",
+        "description": "分别检测通航量和通行时长，并返回两者组合形成的综合状态（regime）与聊天分支（route）",
         "operationId": "detectAnomaly",
         "requestBody": {
           "required": true,
@@ -24,9 +24,24 @@
                 "type": "object",
                 "properties": {
                   "question": {
-                    "type": "string",
-                    "description": "用中文提出的问题，包含年月和通道名称",
-                    "example": "2023年12月 曼德海峡是否发生异常？"
+                    "description": "可传结构化年月日和通道，或包含日期与通道名称的中文问题",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "example": "2026年7月21日 英吉利海峡是否发生异常？"
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "year": {"type": "string"},
+                          "month": {"type": "string"},
+                          "day": {"type": "string"},
+                          "location": {"type": "string"}
+                        },
+                        "required": ["year", "month", "day", "location"]
+                      }
+                    ]
                   }
                 },
                 "required": ["question"]
@@ -54,8 +69,105 @@
                     "pipe_name": {
                       "type": "string"
                     },
-                    "has_congestion": {
-                      "type": "boolean"
+                    "if_anomaly": {
+                      "type": "boolean",
+                      "description": "综合状态是否属于异常；不再只由通航量 anomaly_flag 决定"
+                    },
+                    "route": {
+                      "type": "string",
+                      "enum": ["ANOMALY", "NORMAL", "PARTIAL_DATA", "DATA_ISSUE"]
+                    },
+                    "anomaly_flag": {
+                      "type": "integer",
+                      "description": "通航量检测标识（兼容字段）"
+                    },
+                    "flag_name": {
+                      "type": ["string", "null"],
+                      "description": "通航量检测标识名称"
+                    },
+                    "quantile_10": {
+                      "type": ["number", "null"]
+                    },
+                    "quantile_25": {
+                      "type": ["number", "null"]
+                    },
+                    "quantile_75": {
+                      "type": ["number", "null"]
+                    },
+                    "quantile_90": {
+                      "type": ["number", "null"]
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": ["NORMAL", "LOW", "HIGH", "MIXED", "UNKNOWN"],
+                      "description": "通航量方向"
+                    },
+                    "ratio_low": {
+                      "type": ["number", "null"]
+                    },
+                    "ratio_high": {
+                      "type": ["number", "null"]
+                    },
+                    "anomaly_ratio": {
+                      "type": ["number", "null"],
+                      "description": "兼容字段：低位和高位异常天数的合计比率；最新日为0时保留-1哨兵值"
+                    },
+                    "duration_anomaly_flag": {
+                      "type": ["integer", "null"],
+                      "description": "通行时长检测标识"
+                    },
+                    "duration_quantile_10": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_quantile_25": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_quantile_75": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_quantile_90": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_anomaly_ratio": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_ratio_low": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_ratio_high": {
+                      "type": ["number", "null"]
+                    },
+                    "duration_direction": {
+                      "type": "string",
+                      "enum": ["NORMAL", "LOW", "HIGH", "MIXED", "UNKNOWN"],
+                      "description": "通行时长方向"
+                    },
+                    "duration_status": {
+                      "type": "string",
+                      "description": "通行时长参数/数据可用状态"
+                    },
+                    "regime": {
+                      "type": "string",
+                      "enum": [
+                        "NORMAL",
+                        "AVOIDANCE",
+                        "BLOCKAGE",
+                        "CONGESTION",
+                        "HIGH_THROUGHPUT",
+                        "TRAFFIC_SURGE",
+                        "LOW_TRAFFIC",
+                        "DELAY",
+                        "FAST_TRANSIT",
+                        "VOLATILE",
+                        "COUNT_NORMAL",
+                        "DURATION_NORMAL",
+                        "UNKNOWN"
+                      ],
+                      "description": "通航量与通行时长组合形成的综合状态"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "success=false 时的错误说明"
                     }
                   }
                 }

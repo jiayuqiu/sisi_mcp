@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -18,7 +19,17 @@ import { cn } from "@/lib/utils";
 interface DataPoint {
   date: string;
   ship_cnt: number;
+  duration: number | null;
   anomaly_flag: number | null;
+  direction: string | null;
+  ratio_low: number | null;
+  ratio_high: number | null;
+  duration_anomaly_flag: number | null;
+  duration_direction: string | null;
+  duration_ratio_low: number | null;
+  duration_ratio_high: number | null;
+  duration_status: string | null;
+  regime: string | null;
 }
 
 interface ShipCntResponse {
@@ -56,6 +67,24 @@ const ANOMALY_LABELS: Record<number, string> = {
   4: "黄灯",
 };
 
+const DIRECTION_COLORS: Record<string, string> = {
+  NORMAL: "#10b981",
+  LOW: "#8b5cf6",
+  HIGH: "#f97316",
+  MIXED: "#ec4899",
+  UNKNOWN: "#f59e0b",
+};
+
+function formatRatio(value: number | null): string {
+  return value == null ? "—" : `${(value * 100).toFixed(0)}%`;
+}
+
+function anomalyColor(flag: number | null, direction: string | null): string | null {
+  if (flag == null) return null;
+  if (flag === 1 && direction) return DIRECTION_COLORS[direction] ?? ANOMALY_COLORS[flag];
+  return ANOMALY_COLORS[flag] ?? null;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function subtractDays(fromDate: string, days: number): string {
@@ -76,13 +105,12 @@ function CustomTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: { value: number; payload: DataPoint }[];
+  payload?: { value: number | string; payload: DataPoint }[];
   label?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0].payload;
-  const flagColor =
-    point.anomaly_flag != null ? ANOMALY_COLORS[point.anomaly_flag] : null;
+  const flagColor = anomalyColor(point.anomaly_flag, point.direction);
   const flagLabel =
     point.anomaly_flag != null ? ANOMALY_LABELS[point.anomaly_flag] : null;
 
@@ -93,6 +121,10 @@ function CustomTooltip({
         通航船数量:{" "}
         <span className="text-teal-400 text-sm">{point.ship_cnt}</span>
       </p>
+      <p className="text-white font-semibold">
+        平均时长:{" "}
+        <span className="text-sky-400 text-sm">{point.duration ?? "—"}</span>
+      </p>
       {flagColor && flagLabel && (
         <p className="flex items-center gap-1.5">
           <span
@@ -100,8 +132,26 @@ function CustomTooltip({
             style={{ backgroundColor: flagColor }}
           />
           <span style={{ color: flagColor }}>{flagLabel}</span>
+          {point.direction && <span className="text-slate-400">· {point.direction}</span>}
         </p>
       )}
+      {point.duration_direction && (
+        <p className="text-slate-300">
+          时长方向: <span style={{ color: DIRECTION_COLORS[point.duration_direction] }}>{point.duration_direction}</span>
+          {point.duration_status && <span className="text-slate-500"> · {point.duration_status}</span>}
+        </p>
+      )}
+      {(point.ratio_low != null || point.ratio_high != null) && (
+        <p className="text-slate-500">
+          数量 L/H: {formatRatio(point.ratio_low)} / {formatRatio(point.ratio_high)}
+        </p>
+      )}
+      {(point.duration_ratio_low != null || point.duration_ratio_high != null) && (
+        <p className="text-slate-500">
+          时长 L/H: {formatRatio(point.duration_ratio_low)} / {formatRatio(point.duration_ratio_high)}
+        </p>
+      )}
+      {point.regime && <p className="text-cyan-300 font-medium">状态: {point.regime}</p>}
     </div>
   );
 }
@@ -360,7 +410,6 @@ export default function ShipCntChart({
   };
 
   const tickInterval = Math.max(0, Math.floor(data.length / 8) - 1);
-  const redFlags = data.filter((d) => d.anomaly_flag === 1);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -476,7 +525,7 @@ export default function ShipCntChart({
 
         {!error && (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
+            <ComposedChart
               data={data}
               margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
             >
@@ -516,6 +565,7 @@ export default function ShipCntChart({
               />
 
               <YAxis
+                yAxisId="count"
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 axisLine={false}
                 tickLine={false}
@@ -529,9 +579,26 @@ export default function ShipCntChart({
                 }}
               />
 
+              <YAxis
+                yAxisId="duration"
+                orientation="right"
+                tick={{ fontSize: 10, fill: "#64748b" }}
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: "平均时长",
+                  angle: 90,
+                  position: "insideRight",
+                  offset: 12,
+                  fontSize: 10,
+                  fill: "#475569",
+                }}
+              />
+
               <Tooltip content={<CustomTooltip />} />
 
               <Area
+                yAxisId="count"
                 type="monotone"
                 dataKey="ship_cnt"
                 stroke="#14b8a6"
@@ -543,10 +610,7 @@ export default function ShipCntChart({
                     cy: number;
                     payload: DataPoint;
                   };
-                  const color =
-                    payload.anomaly_flag != null
-                      ? ANOMALY_COLORS[payload.anomaly_flag]
-                      : null;
+                  const color = anomalyColor(payload.anomaly_flag, payload.direction);
                   if (color) {
                     const isObvious = payload.anomaly_flag === 1 || (payload.anomaly_flag != null && payload.anomaly_flag >= 2);
                     return (
@@ -598,7 +662,38 @@ export default function ShipCntChart({
                 isAnimationActive={true}
                 animationDuration={600}
               />
-            </AreaChart>
+              <Line
+                yAxisId="duration"
+                type="monotone"
+                dataKey="duration"
+                stroke="#38bdf8"
+                strokeWidth={1.5}
+                connectNulls={false}
+                dot={(props) => {
+                  const { cx, cy, payload } = props as {
+                    cx: number;
+                    cy: number;
+                    payload: DataPoint;
+                  };
+                  const color = anomalyColor(
+                    payload.duration_anomaly_flag,
+                    payload.duration_direction,
+                  );
+                  if (!color || payload.duration_anomaly_flag === 0) {
+                    return <g key={`duration-dot-${payload.date}`} />;
+                  }
+                  return (
+                    <g key={`duration-dot-${payload.date}`}>
+                      <circle cx={cx} cy={cy} r={5} fill={`${color}20`} stroke={`${color}80`} />
+                      <circle cx={cx} cy={cy} r={2.5} fill={color} />
+                    </g>
+                  );
+                }}
+                activeDot={{ r: 4, fill: "#38bdf8", stroke: "#0f172a", strokeWidth: 2 }}
+                isAnimationActive={true}
+                animationDuration={600}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
@@ -609,6 +704,19 @@ export default function ShipCntChart({
           <span className="inline-block w-3 h-0.5 bg-teal-500 rounded" />
           <span>通航船数量</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-0.5 bg-sky-400 rounded" />
+          <span>平均时长</span>
+        </div>
+        {(["LOW", "HIGH", "MIXED"] as const).map((direction) => (
+          <div key={direction} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ backgroundColor: DIRECTION_COLORS[direction] }}
+            />
+            <span>{direction}</span>
+          </div>
+        ))}
         {([
           { color: "#ef4444", label: "红灯" },
           { color: "#f59e0b", label: "黄灯" },

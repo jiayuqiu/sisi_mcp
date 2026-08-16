@@ -1,10 +1,18 @@
 import pandas as pd
 import logging
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import datetime
 from sqlalchemy import text
 
-from mcp_conductor.detector.roll_percentile import RollingPercentileDetector
+from mcp_conductor.detector.roll_percentile import (
+    DIRECTION_HIGH,
+    DIRECTION_LOW,
+    DIRECTION_MIXED,
+    DIRECTION_NORMAL,
+    DIRECTION_UNKNOWN,
+    METRIC_DURATION,
+    METRIC_SHIP_COUNT,
+    RollingPercentileDetector,
+)
 from mcp_conductor.resources.utils.db import get_engine
 from mcp_conductor.resources.utils.sisi_dataclasses import ROLLING_PERCENTILE_FLAG as FLAG
 
@@ -14,6 +22,83 @@ logger = logging.getLogger(__name__)
 PIPE_TABLE = "ship_cnt_in_pipe"
 PORT_TABLE = "ship_cnt_in_port"
 PARAM_TABLE = "m_roll_percentile_parameter"
+
+REGIME_NORMAL = "NORMAL"
+REGIME_AVOIDANCE = "AVOIDANCE"
+REGIME_BLOCKAGE = "BLOCKAGE"
+REGIME_CONGESTION = "CONGESTION"
+REGIME_HIGH_THROUGHPUT = "HIGH_THROUGHPUT"
+REGIME_TRAFFIC_SURGE = "TRAFFIC_SURGE"
+REGIME_LOW_TRAFFIC = "LOW_TRAFFIC"
+REGIME_DELAY = "DELAY"
+REGIME_FAST_TRANSIT = "FAST_TRANSIT"
+REGIME_VOLATILE = "VOLATILE"
+REGIME_COUNT_NORMAL = "COUNT_NORMAL"
+REGIME_DURATION_NORMAL = "DURATION_NORMAL"
+REGIME_UNKNOWN = "UNKNOWN"
+
+# Rows are ship-count direction; columns are duration direction. Partial-data labels
+# preserve the usable channel instead of pretending both metrics were available.
+REGIME_MATRIX: dict[str, dict[str, str]] = {
+    DIRECTION_NORMAL: {
+        DIRECTION_NORMAL: REGIME_NORMAL,
+        DIRECTION_LOW: REGIME_FAST_TRANSIT,
+        DIRECTION_HIGH: REGIME_DELAY,
+        DIRECTION_MIXED: REGIME_VOLATILE,
+        DIRECTION_UNKNOWN: REGIME_COUNT_NORMAL,
+    },
+    DIRECTION_LOW: {
+        DIRECTION_NORMAL: REGIME_LOW_TRAFFIC,
+        DIRECTION_LOW: REGIME_AVOIDANCE,
+        DIRECTION_HIGH: REGIME_BLOCKAGE,
+        DIRECTION_MIXED: REGIME_VOLATILE,
+        DIRECTION_UNKNOWN: REGIME_LOW_TRAFFIC,
+    },
+    DIRECTION_HIGH: {
+        DIRECTION_NORMAL: REGIME_TRAFFIC_SURGE,
+        DIRECTION_LOW: REGIME_HIGH_THROUGHPUT,
+        DIRECTION_HIGH: REGIME_CONGESTION,
+        DIRECTION_MIXED: REGIME_VOLATILE,
+        DIRECTION_UNKNOWN: REGIME_TRAFFIC_SURGE,
+    },
+    DIRECTION_MIXED: {
+        direction: REGIME_VOLATILE
+        for direction in (
+            DIRECTION_NORMAL,
+            DIRECTION_LOW,
+            DIRECTION_HIGH,
+            DIRECTION_MIXED,
+            DIRECTION_UNKNOWN,
+        )
+    },
+    DIRECTION_UNKNOWN: {
+        DIRECTION_NORMAL: REGIME_DURATION_NORMAL,
+        DIRECTION_LOW: REGIME_FAST_TRANSIT,
+        DIRECTION_HIGH: REGIME_DELAY,
+        DIRECTION_MIXED: REGIME_VOLATILE,
+        DIRECTION_UNKNOWN: REGIME_UNKNOWN,
+    },
+}
+
+
+def classify_regime(count_direction: str, duration_direction: str) -> str:
+    """Map count and duration directions to one stable reporting regime."""
+    return REGIME_MATRIX.get(count_direction, REGIME_MATRIX[DIRECTION_UNKNOWN]).get(
+        duration_direction,
+        REGIME_UNKNOWN,
+    )
+
+
+def _duration_status(parameters: dict | None, anomaly_flag: int) -> str:
+    """Return a concise duration-channel status for persistence and presentation."""
+    if parameters is None:
+        return "NO_PARAMETERS"
+    parameter_status = str(parameters.get("status", "NO_DATA"))
+    if parameter_status != "OK":
+        return parameter_status
+    if anomaly_flag == FLAG.NO_DATA:
+        return "NO_DATA"
+    return "OK"
 
 
 def get_pipe_ship_cnt(pipe_name: str, start_date_id: int, end_date_id: int, engine) -> pd.DataFrame:
@@ -84,7 +169,7 @@ def get_pipe_name_list(engine) -> list[str]:
     Raises:
         ValueError: if the table contains no rows.
     """
-    sql = f"""
+    sql = """
         SELECT DISTINCT
             pipe_name
         FROM
@@ -166,6 +251,7 @@ def detect_one_location(
     run_date_id: int,
     detector: RollingPercentileDetector,
     parameters: dict | None,
+    metric: str = METRIC_SHIP_COUNT,
 ) -> dict:
     """
     Run rolling-percentile detection on a single strait's historical data.
@@ -174,10 +260,12 @@ def detect_one_location(
     numeric fields. Otherwise delegates to the detector.
 
     Args:
-        signals     : historical ship count DataFrame (columns: date_id, ship_cnt).
-        pipe_name   : strait name, passed through to the detector and result.
+        signals     : historical metric DataFrame (date_id, ship_cnt, duration).
+        name_str    : strait or port name, passed through to the detector and result.
         run_date_id : reference date in YYYYMMDD format.
         detector    : configured RollingPercentileDetector instance.
+        parameters  : effective fitted row for ``metric``.
+        metric      : ``ship_cnt`` or ``duration``.
 
     Returns:
         dict:
@@ -189,6 +277,9 @@ def detect_one_location(
                 "quantile_25"   : float,  # 25th-percentile ship count
                 "quantile_75"   : float,  # 75th-percentile ship count
                 "quantile_90"   : float,  # 90th-percentile ship count
+                "ratio_low"     : float,  # days below lower bound / interval_days
+                "ratio_high"    : float,  # days above upper bound / interval_days
+                "direction"     : str,    # NORMAL | LOW | HIGH | MIXED | UNKNOWN
                 "anomaly_ratio" : float,  # outlier days / interval_days
             }
     """
@@ -200,16 +291,22 @@ def detect_one_location(
             "quantile_25": None,
             "quantile_75": None,
             "quantile_90": None,
+            "ratio_low": None,
+            "ratio_high": None,
+            "direction": DIRECTION_UNKNOWN,
             "anomaly_ratio": None,
         }
     else:
-        anomaly_detection = detector.detect(
-            value=signals,
-            location_col_name=location_col_name,
-            name_str=name_str,
-            run_date_id=run_date_id,
-            parameters=parameters,
-        )
+        detect_kwargs = {
+            "value": signals,
+            "location_col_name": location_col_name,
+            "name_str": name_str,
+            "run_date_id": run_date_id,
+            "parameters": parameters,
+        }
+        if metric != METRIC_SHIP_COUNT:
+            detect_kwargs["metric"] = metric
+        anomaly_detection = detector.detect(**detect_kwargs)
     detection_result = {
         location_col_name: name_str,
         "run_date_id": run_date_id,
@@ -218,6 +315,9 @@ def detect_one_location(
         "quantile_25": anomaly_detection.get("quantile_25"),
         "quantile_75": anomaly_detection.get("quantile_75"),
         "quantile_90": anomaly_detection.get("quantile_90"),
+        "ratio_low": anomaly_detection.get("ratio_low"),
+        "ratio_high": anomaly_detection.get("ratio_high"),
+        "direction": anomaly_detection.get("direction", DIRECTION_UNKNOWN),
         "anomaly_ratio": anomaly_detection.get("anomaly_ratio"),
     }
     return detection_result
@@ -239,23 +339,60 @@ def run_detect(app_type: str,
         else:
             raise ValueError(f"Unsupported app_type: {app_type}")
 
-        parameters = get_roll_percentile_parameters(
+        count_parameters = get_roll_percentile_parameters(
             location_type=app_type,
             location_name=_name,
-            metric="ship_cnt",
+            metric=METRIC_SHIP_COUNT,
+            run_date_id=run_date_id,
+            engine=engine,
+        )
+        duration_parameters = get_roll_percentile_parameters(
+            location_type=app_type,
+            location_name=_name,
+            metric=METRIC_DURATION,
             run_date_id=run_date_id,
             engine=engine,
         )
         signals = load_signals(_name, start_date_id, run_date_id, engine)
-        detection_result = detect_one_location(
+        count_result = detect_one_location(
             signals,
             app_type,
             _name,
             run_date_id,
             detector,
-            parameters,
+            count_parameters,
         )
-        detection_result_list.append(detection_result)
+        duration_result = detect_one_location(
+            signals,
+            app_type,
+            _name,
+            run_date_id,
+            detector,
+            duration_parameters,
+            metric=METRIC_DURATION,
+        )
+        count_result.update(
+            {
+                "duration_anomaly_flag": duration_result["anomaly_flag"],
+                "duration_quantile_10": duration_result["quantile_10"],
+                "duration_quantile_25": duration_result["quantile_25"],
+                "duration_quantile_75": duration_result["quantile_75"],
+                "duration_quantile_90": duration_result["quantile_90"],
+                "duration_anomaly_ratio": duration_result["anomaly_ratio"],
+                "duration_ratio_low": duration_result["ratio_low"],
+                "duration_ratio_high": duration_result["ratio_high"],
+                "duration_direction": duration_result["direction"],
+                "duration_status": _duration_status(
+                    duration_parameters,
+                    duration_result["anomaly_flag"],
+                ),
+                "regime": classify_regime(
+                    count_result["direction"],
+                    duration_result["direction"],
+                ),
+            }
+        )
+        detection_result_list.append(count_result)
     return detection_result_list
 
 
@@ -263,16 +400,17 @@ def rp_detect_engine(run_date: str) -> dict:
     """
     Run rolling percentile anomaly detection across all straits for a given date.
 
-    For each strait in ship_cnt_in_pipe:
-        1. Load its full historical ship count data.
-        2. Run RollingPercentileDetector to check whether recent traffic is anomalous.
-        3. Collect the result.
+    For each pipe and port:
+        1. Load count and duration observations through the serving date.
+        2. Score both metrics with their date-effective fitted parameters.
+        3. Combine directions into a reporting regime.
 
     Args:
         run_date: detection date in YYYY-MM-DD format.
 
     Returns:
-        List of dicts, one per strait:
+        Dict containing pipe and port result lists. Each location result retains the
+        legacy count fields and adds parallel ``duration_*`` fields plus ``regime``:
             {
                 "pipe_name"     : str,
                 "run_date_id"   : int,    # YYYYMMDD
@@ -281,7 +419,16 @@ def rp_detect_engine(run_date: str) -> dict:
                 "quantile_25"   : float,  # 25th-percentile ship count
                 "quantile_75"   : float,  # 75th-percentile ship count
                 "quantile_90"   : float,  # 90th-percentile ship count
+                "ratio_low"     : float,  # days below lower bound / interval_days
+                "ratio_high"    : float,  # days above upper bound / interval_days
+                "direction"     : str,    # NORMAL | LOW | HIGH | MIXED | UNKNOWN
                 "anomaly_ratio" : float,  # outlier days / interval_days
+                "duration_anomaly_flag": int,
+                "duration_ratio_low"   : float,
+                "duration_ratio_high"  : float,
+                "duration_direction"   : str,
+                "duration_status"      : str,
+                "regime"               : str,
             }
     """
     engine = get_engine()
@@ -292,8 +439,10 @@ def rp_detect_engine(run_date: str) -> dict:
     # set start and end date
     run_date_obj = datetime.strptime(str(run_date), "%Y-%m-%d")
     run_date_id = int(run_date_obj.strftime("%Y%m%d"))
-    start_date_obj = run_date_obj - timedelta(days=detector.window)
-    start_date_id = int(start_date_obj.strftime("%Y%m%d"))
+    # Duration thresholds are calibrated on usable (non-zero) observations. Sparse
+    # locations may need to reach back beyond a fixed calendar window to collect the
+    # configured interval, so load their available history through the serving date.
+    start_date_id = 0
 
     # base on run_date find out the records in monitor time window
     # group by pipe/port name

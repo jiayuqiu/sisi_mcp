@@ -9,7 +9,17 @@ const DB_PATH =
 interface ShipCntRow {
   date_id: number;
   ship_cnt: number;
+  duration: number | null;
   anomaly_flag: number | null;
+  direction: string | null;
+  ratio_low: number | null;
+  ratio_high: number | null;
+  duration_anomaly_flag: number | null;
+  duration_direction: string | null;
+  duration_ratio_low: number | null;
+  duration_ratio_high: number | null;
+  duration_status: string | null;
+  regime: string | null;
 }
 
 type Dimension = "pipe" | "port";
@@ -93,18 +103,32 @@ export async function GET(req: NextRequest) {
     }
 
     // Both pipes and ports derive their plot color from anomaly_flag in
-    // m_pipe_anomaly_roll_percentile (keyed by name + date_id). The
+    // m_pipe_anomaly_roll_percentile (keyed by type + name + date_id). The
     // detection_flag column on the source tables is deprecated.
     const rows = db
       .prepare(
-        `SELECT s.date_id, s.ship_cnt, a.anomaly_flag
+        `SELECT s.date_id,
+                s.ship_cnt,
+                s.duration,
+                a.anomaly_flag,
+                a.direction,
+                a.ratio_low,
+                a.ratio_high,
+                a.duration_anomaly_flag,
+                a.duration_direction,
+                a.duration_ratio_low,
+                a.duration_ratio_high,
+                a.duration_status,
+                a.regime
            FROM ${sourceTable} s
            LEFT JOIN m_pipe_anomaly_roll_percentile a
-             ON a.pipe_name = s.${sourceNameColumn} AND a.date_id = s.date_id
+             ON a.location_type = ?
+            AND a.pipe_name = s.${sourceNameColumn}
+            AND a.date_id = s.date_id
            WHERE s.${sourceNameColumn} = ? AND s.date_id >= ? AND s.date_id <= ?
            ORDER BY s.date_id ASC`,
       )
-      .all(name, startId, endId) as ShipCntRow[];
+      .all(dimension, name, startId, endId) as ShipCntRow[];
 
     // Fetch overall min/max date_id for this pipe (for date picker bounds)
     const bounds = db
@@ -123,7 +147,17 @@ export async function GET(req: NextRequest) {
       return {
         date: dateStr,
         ship_cnt: r.ship_cnt,
+        duration: r.duration ?? null,
         anomaly_flag: r.anomaly_flag ?? null,
+        direction: r.direction ?? null,
+        ratio_low: r.ratio_low ?? null,
+        ratio_high: r.ratio_high ?? null,
+        duration_anomaly_flag: r.duration_anomaly_flag ?? null,
+        duration_direction: r.duration_direction ?? null,
+        duration_ratio_low: r.duration_ratio_low ?? null,
+        duration_ratio_high: r.duration_ratio_high ?? null,
+        duration_status: r.duration_status ?? null,
+        regime: r.regime ?? null,
       };
     });
 

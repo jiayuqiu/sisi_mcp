@@ -26,6 +26,12 @@ ZBXX_ROUTES = {
     "101-0004": {"table": "ship_cnt_in_pipe", "key_col": "pipe_name", "value_col": "duration", "cast": float},
 }
 
+# The upstream API sometimes repeats these canal series under the port metric IDs.
+# They are navigation corridors, not ports, and already have authoritative pipe rows.
+# Reject only their port-routed items so the valid 101-0003/101-0004 records survive.
+PIPE_ONLY_LOCATION_NAMES = frozenset({"巴拿马运河", "苏伊士运河"})
+
+
 def write_status(status: str, **kwargs):
     """Write sync status to data/sync_status.json and append to tmp/sync_history.json."""
     import json
@@ -118,6 +124,7 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
     inserted_count = 0
     inserted_by_metric = defaultdict(int)
     malformed_count = 0
+    excluded_port_canal_count = 0
 
     try:
         for item in fetched_items:
@@ -151,6 +158,18 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
             zbxx_config_dict = ZBXX_ROUTES.get(value_business_type)
             if zbxx_config_dict is None:
                 logger.warning("Skipping item with unroutable zbxx %r: %s", value_business_type, item)
+                continue
+
+            if (
+                zbxx_config_dict["table"] == "ship_cnt_in_port"
+                and location_name in PIPE_ONLY_LOCATION_NAMES
+            ):
+                excluded_port_canal_count += 1
+                logger.warning(
+                    "Skipping pipe-only location %s returned under port metric %s.",
+                    location_name,
+                    value_business_type,
+                )
                 continue
 
             # Convert YYYY-MM-DD -> YYYYMMDD
@@ -192,10 +211,15 @@ def sync_bci_data(start_date: str, end_date: str) -> dict:
 
         conn.commit()
         logger.info(
-            "Successfully synced %d records (%s)%s.",
+            "Successfully synced %d records (%s)%s%s.",
             inserted_count,
             ", ".join(f"{k}={v}" for k, v in sorted(inserted_by_metric.items())),
             f", skipped {malformed_count} malformed" if malformed_count else "",
+            (
+                f", excluded {excluded_port_canal_count} pipe-only port items"
+                if excluded_port_canal_count
+                else ""
+            ),
         )
         write_status("success", start_date=start_date, end_date=end_date, inserted_count=inserted_count)
         return {"success": True, "inserted_count": inserted_count, "reason": None}

@@ -32,6 +32,66 @@ logger = logging.getLogger("dify_api")
 
 DB_PATH = Path("./data/sisi.sqlite")
 
+DIRECTION_LABELS = {
+    "NORMAL": "正常",
+    "LOW": "通航量异常偏低",
+    "HIGH": "通航量异常偏高",
+    "MIXED": "通航量高低双向波动",
+    "UNKNOWN": "方向未知",
+}
+
+DURATION_DIRECTION_LABELS = {
+    "NORMAL": "通行时长正常",
+    "LOW": "通行时长异常偏低",
+    "HIGH": "通行时长异常偏高",
+    "MIXED": "通行时长高低双向波动",
+    "UNKNOWN": "通行时长状态未知",
+}
+
+REGIME_LABELS = {
+    "NORMAL": "通航量与通行时长均正常",
+    "AVOIDANCE": "疑似绕行或主动避让",
+    "BLOCKAGE": "疑似受阻或封锁",
+    "CONGESTION": "交通拥堵",
+    "HIGH_THROUGHPUT": "高效高吞吐通行",
+    "TRAFFIC_SURGE": "通航量激增",
+    "LOW_TRAFFIC": "通航量偏低",
+    "DELAY": "通行延误",
+    "FAST_TRANSIT": "通行速度偏快",
+    "VOLATILE": "通航状态剧烈波动",
+    "COUNT_NORMAL": "通航量正常但时长数据不可用",
+    "DURATION_NORMAL": "通行时长正常但通航量数据不可用",
+    "UNKNOWN": "综合状态未知",
+}
+
+ANOMALOUS_REGIMES = {
+    "AVOIDANCE",
+    "BLOCKAGE",
+    "CONGESTION",
+    "HIGH_THROUGHPUT",
+    "TRAFFIC_SURGE",
+    "LOW_TRAFFIC",
+    "DELAY",
+    "FAST_TRANSIT",
+    "VOLATILE",
+}
+PARTIAL_DATA_REGIMES = {"COUNT_NORMAL", "DURATION_NORMAL"}
+
+
+def _route_for_regime(regime: str) -> str:
+    """Map the detector regime to one stable chatbot branch."""
+    if regime in ANOMALOUS_REGIMES:
+        return "ANOMALY"
+    if regime == "NORMAL":
+        return "NORMAL"
+    if regime in PARTIAL_DATA_REGIMES:
+        return "PARTIAL_DATA"
+    return "DATA_ISSUE"
+
+
+def _ratio_text(value: float | None) -> str:
+    return f"{value:.2%}" if value is not None else "未知"
+
 app = FastAPI(title="Dify Traffic Detection API")
 
 # Add CORS middleware
@@ -45,7 +105,7 @@ app.add_middleware(
 
 
 class QuestionRequest(BaseModel):
-    question: str
+    question: str | dict[str, object]
 
 
 class PlotRequest(BaseModel):
@@ -106,11 +166,11 @@ def parse_question(question: str) -> tuple[str | None, str | None]:
     return run_date, pipe
 
 
-def parse_question_json(question: str) -> tuple[str | None, str | None]:
+def parse_question_json(question: str | dict[str, object]) -> tuple[str | None, str | None]:
     if not question:
         return None, None
 
-    structured_question = json.loads(question)
+    structured_question = json.loads(question) if isinstance(question, str) else question
     # Zero-pad so unpadded values (e.g. month "4", day "6") don't corrupt date_id
     run_date = (
         f"{int(structured_question['year']):04d}"
@@ -154,8 +214,15 @@ async def detect_anomaly(request: QuestionRequest):
     try:
         logger.info(f"Detect anomaly request: {request.question}")
 
-        # Parse the question
-        run_date, pipe_name = parse_question_json(request.question)
+        # Dify sends a structured JSON string, while direct API callers may use the
+        # natural-language format documented by this endpoint.
+        try:
+            run_date, pipe_name = parse_question_json(request.question)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            if isinstance(request.question, str):
+                run_date, pipe_name = parse_question(request.question)
+            else:
+                run_date, pipe_name = None, None
         logger.info(f"Detect anomaly parse_question: {run_date}, {pipe_name}")
         if not run_date or not pipe_name:
             return {
@@ -175,11 +242,25 @@ async def detect_anomaly(request: QuestionRequest):
                     quantile_25,
                     quantile_75,
                     quantile_90, 
-                    anomaly_ratio 
+                    anomaly_ratio,
+                    ratio_low,
+                    ratio_high,
+                    direction,
+                    duration_anomaly_flag,
+                    duration_quantile_10,
+                    duration_quantile_25,
+                    duration_quantile_75,
+                    duration_quantile_90,
+                    duration_anomaly_ratio,
+                    duration_ratio_low,
+                    duration_ratio_high,
+                    duration_direction,
+                    duration_status,
+                    regime
                 FROM 
                     vw_m_pipe_anomaly_roll_percentile 
                 WHERE 
-                    pipe_name = ? AND date_id = ?
+                    location_type = 'pipe' AND pipe_name = ? AND date_id = ?
                 """
             logger.debug(_sql)
             row = conn.execute(
@@ -194,20 +275,68 @@ async def detect_anomaly(request: QuestionRequest):
                 "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
             }
 
-        anomaly_flag, flag_name, description, quantile_10, quantile_25, quantile_75, quantile_90, anomaly_ratio = row
+        (
+            anomaly_flag,
+            flag_name,
+            description,
+            quantile_10,
+            quantile_25,
+            quantile_75,
+            quantile_90,
+            anomaly_ratio,
+            ratio_low,
+            ratio_high,
+            direction,
+            duration_anomaly_flag,
+            duration_quantile_10,
+            duration_quantile_25,
+            duration_quantile_75,
+            duration_quantile_90,
+            duration_anomaly_ratio,
+            duration_ratio_low,
+            duration_ratio_high,
+            duration_direction,
+            duration_status,
+            regime,
+        ) = row
+        direction = direction or "UNKNOWN"
+        duration_direction = duration_direction or "UNKNOWN"
+        duration_status = duration_status or "NO_DATA"
+        regime = regime or "UNKNOWN"
+        route = _route_for_regime(regime)
+        direction_label = DIRECTION_LABELS.get(direction, DIRECTION_LABELS["UNKNOWN"])
+        duration_direction_label = DURATION_DIRECTION_LABELS.get(
+            duration_direction,
+            DURATION_DIRECTION_LABELS["UNKNOWN"],
+        )
+        regime_label = REGIME_LABELS.get(regime, REGIME_LABELS["UNKNOWN"])
 
-        if anomaly_flag == 0 :
-            result_text = f"✅ 检测结果：{run_date} {pipe_name} 无异常发生（{description})"
-        elif anomaly_flag == 1:
-            result_text = f"🚢 检测结果：{run_date} {pipe_name} 发生异常（{description}), 近30日异常比率 {anomaly_ratio:.2%}"
-        elif anomaly_flag == 2:
-            result_text = f"🚢 检测结果：{run_date} {pipe_name} 无航道通航数据, 通航记录为0"
-        elif anomaly_flag == 3:
-            result_text = f"🚢 检测结果：{run_date} {pipe_name} 航道通航数据异常, 10%与90%分位数 非0且相等"
-        elif anomaly_flag == 4:
-            result_text = f"🚢 检测结果：{run_date} {pipe_name} 航道通航数据异常, 90%分位数 小于 3 艘, 通航艘数太小, 不列入判断."
+        if route == "NORMAL":
+            result_text = (
+                f"✅ 检测结果：{run_date} {pipe_name} {regime_label}（{regime}）。"
+                f"通航量：{direction_label}；通行时长：{duration_direction_label}。"
+            )
+        elif route == "ANOMALY":
+            result_text = (
+                f"🚢 检测结果：{run_date} {pipe_name} {regime_label}（{regime}）。"
+                f"通航量：{direction_label}，低位比率 {_ratio_text(ratio_low)}，"
+                f"高位比率 {_ratio_text(ratio_high)}；"
+                f"通行时长：{duration_direction_label}，低位比率 "
+                f"{_ratio_text(duration_ratio_low)}，高位比率 "
+                f"{_ratio_text(duration_ratio_high)}。"
+            )
+        elif route == "PARTIAL_DATA":
+            result_text = (
+                f"⚠️ 检测结果：{run_date} {pipe_name} {regime_label}（{regime}）。"
+                f"通航量：{direction_label}（{flag_name}）；"
+                f"通行时长：{duration_direction_label}（{duration_status}）。"
+            )
         else:
-            raise ValueError(f"anomaly_flag should be in [0,1,2,3,4], currently type -> {type(anomaly_flag)}, value -> {anomaly_flag}")
+            result_text = (
+                f"⚠️ 检测结果：{run_date} {pipe_name} 无法形成可靠综合判断。"
+                f"通航量状态：{flag_name}（{description}）；"
+                f"通行时长状态：{duration_status}。"
+            )
 
         logger.info(f"Detection result: {result_text}")
         return {
@@ -215,14 +344,29 @@ async def detect_anomaly(request: QuestionRequest):
             "result": result_text,
             "run_date": run_date,
             "pipe_name": pipe_name,
-            "if_anomaly": anomaly_flag == 1,
+            "if_anomaly": route == "ANOMALY",
+            "route": route,
             "anomaly_flag": anomaly_flag,
             "flag_name": flag_name,
             "quantile_10": quantile_10,
             "quantile_25": quantile_25,
             "quantile_75": quantile_75,
             "quantile_90": quantile_90,
+            "ratio_low": ratio_low,
+            "ratio_high": ratio_high,
+            "direction": direction,
             "anomaly_ratio": anomaly_ratio,
+            "duration_anomaly_flag": duration_anomaly_flag,
+            "duration_quantile_10": duration_quantile_10,
+            "duration_quantile_25": duration_quantile_25,
+            "duration_quantile_75": duration_quantile_75,
+            "duration_quantile_90": duration_quantile_90,
+            "duration_anomaly_ratio": duration_anomaly_ratio,
+            "duration_ratio_low": duration_ratio_low,
+            "duration_ratio_high": duration_ratio_high,
+            "duration_direction": duration_direction,
+            "duration_status": duration_status,
+            "regime": regime,
         }
 
     except Exception as e:
@@ -257,12 +401,22 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         with sqlite3.connect(str(DB_PATH)) as conn:
             _sql = f"""
                 SELECT 
-                    anomaly_flag, 
-                    anomaly_ratio 
+                    anomaly_flag,
+                    anomaly_ratio,
+                    ratio_low,
+                    ratio_high,
+                    direction,
+                    duration_anomaly_flag,
+                    duration_anomaly_ratio,
+                    duration_ratio_low,
+                    duration_ratio_high,
+                    duration_direction,
+                    duration_status,
+                    regime
                 FROM 
                     vw_m_pipe_anomaly_roll_percentile 
                 WHERE 
-                    pipe_name = ? AND date_id = ?
+                    location_type = 'pipe' AND pipe_name = ? AND date_id = ?
                 """
             logger.debug(_sql)
             row = conn.execute(
@@ -277,11 +431,37 @@ async def analyze_anomaly_reason(request: QuestionRequest):
                 "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
             }
         
-        # get anomaly ratio
-        _, anomaly_ratio = row
+        (
+            anomaly_flag,
+            anomaly_ratio,
+            ratio_low,
+            ratio_high,
+            direction,
+            duration_anomaly_flag,
+            duration_anomaly_ratio,
+            duration_ratio_low,
+            duration_ratio_high,
+            duration_direction,
+            duration_status,
+            regime,
+        ) = row
+        direction = direction or "UNKNOWN"
+        duration_direction = duration_direction or "UNKNOWN"
+        duration_status = duration_status or "NO_DATA"
+        regime = regime or "UNKNOWN"
 
         # trigger analysis
-        analysis = analyze_congestion(pipe_name, run_date)
+        analysis = analyze_congestion(
+            pipe_name,
+            run_date,
+            direction=direction,
+            ratio_low=ratio_low,
+            ratio_high=ratio_high,
+            duration_direction=duration_direction,
+            duration_ratio_low=duration_ratio_low,
+            duration_ratio_high=duration_ratio_high,
+            regime=regime,
+        )
 
         combined_reason_text = "\n".join(
             part
@@ -296,7 +476,8 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         )
 
         date_id = run_date.replace("-", "")
-        conclusion = f"{date_id}日，{pipe_name}发生交通异常"
+        regime_label = REGIME_LABELS.get(regime, REGIME_LABELS["UNKNOWN"])
+        conclusion = f"{date_id}日，{pipe_name}{regime_label}（{regime}）"
         weather_factor = analysis.get("weather_factor") or _pick_factor_sentence(
             combined_reason_text,
             ["天气", "风", "雨", "能见度", "海况", "台风", "风暴", "雾"],
@@ -326,6 +507,18 @@ async def analyze_anomaly_reason(request: QuestionRequest):
             "conclusion": conclusion,
             "weather_factor": weather_factor,
             "political_factor": political_factor,
+            "anomaly_ratio": anomaly_ratio,
+            "ratio_low": ratio_low,
+            "ratio_high": ratio_high,
+            "direction": direction,
+            "anomaly_flag": anomaly_flag,
+            "duration_anomaly_flag": duration_anomaly_flag,
+            "duration_anomaly_ratio": duration_anomaly_ratio,
+            "duration_ratio_low": duration_ratio_low,
+            "duration_ratio_high": duration_ratio_high,
+            "duration_direction": duration_direction,
+            "duration_status": duration_status,
+            "regime": regime,
         }
 
     except Exception as e:

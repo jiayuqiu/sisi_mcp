@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
+import requests
+
 from mcp_conductor.entry import main_trigger_dify_chatflow as trigger
 
 
@@ -14,10 +16,11 @@ def _init_test_db(db_path: Path) -> None:
     conn.execute(
         """
         CREATE TABLE m_pipe_anomaly_roll_percentile (
+            location_type TEXT NOT NULL,
             pipe_name TEXT,
             date_id INTEGER,
             anomaly_flag INTEGER,
-            PRIMARY KEY (pipe_name, date_id)
+            PRIMARY KEY (location_type, pipe_name, date_id)
         )
         """
     )
@@ -38,8 +41,12 @@ def _init_test_db(db_path: Path) -> None:
         """
     )
     conn.execute(
-        "INSERT INTO m_pipe_anomaly_roll_percentile (pipe_name, date_id, anomaly_flag) VALUES (?, ?, ?)",
-        ("霍尔木兹海峡", 20260415, 1),
+        "INSERT INTO m_pipe_anomaly_roll_percentile (location_type, pipe_name, date_id, anomaly_flag) VALUES (?, ?, ?, ?)",
+        ("pipe", "霍尔木兹海峡", 20260415, 1),
+    )
+    conn.execute(
+        "INSERT INTO m_pipe_anomaly_roll_percentile (location_type, pipe_name, date_id, anomaly_flag) VALUES (?, ?, ?, ?)",
+        ("port", "霍尔木兹海峡", 20260415, 1),
     )
     conn.commit()
     conn.close()
@@ -98,6 +105,7 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
         assert date_id == 20260415
         assert pipe_name == "霍尔木兹海峡"
         assert content == "new final answer"
+        mock_call.assert_called_once()
 
     @patch.object(trigger, "call_dify_chatflow")
     def test_update_existing_worklog_row_by_pipe_and_date(self, mock_call):
@@ -161,6 +169,46 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
         assert question_type == "weather_news"
         assert payload == "existing-payload"
         assert content == "new long final answer"
+
+    @patch.object(trigger, "call_dify_chatflow")
+    def test_retries_dify_internal_timeout_then_succeeds(self, mock_call):
+        timeout_response = requests.Response()
+        timeout_response.status_code = 400
+        timeout_response._content = b'{"message":"Run failed: timed out"}'
+        timeout_error = requests.exceptions.HTTPError(
+            "Dify returned 400: timed out",
+            response=timeout_response,
+        )
+        mock_call.side_effect = [
+            timeout_error,
+            {"answer": "answer after retry", "message_id": "msg-retry-1"},
+        ]
+
+        with patch.object(trigger, "DB_PATH", self.db_path), patch.dict(
+            os.environ,
+            {"DIFY_API_KEY": "dummy", "DIFY_CHATFLOW_URL": "http://example/v1"},
+            clear=False,
+        ):
+            trigger.run(
+                start_date=date(2026, 4, 15),
+                end_date=date(2026, 4, 15),
+                pipe_filter="霍尔木兹海峡",
+                dry_run=False,
+                limit=None,
+                sleep=0,
+                user="test-user",
+                timeout=5.0,
+                retries=1,
+                retry_backoff=0,
+            )
+
+        assert mock_call.call_count == 2
+        with sqlite3.connect(str(self.db_path)) as conn:
+            row = conn.execute(
+                "SELECT content FROM log_agent_worklog WHERE pipe_name = ? AND date_id = ?",
+                ("霍尔木兹海峡", 20260415),
+            ).fetchone()
+        assert row == ("answer after retry",)
 
     @unittest.skip("skip. only trigger in developing.")
     def test_call_dify_chatflow(self):

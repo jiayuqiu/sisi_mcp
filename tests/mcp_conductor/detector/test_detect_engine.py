@@ -8,6 +8,7 @@ from mcp_conductor.detector.roll_percentile import RollingPercentileDetector
 from mcp_conductor.detector.detect_engine import (
     PIPE_TABLE,
     PORT_TABLE,
+    classify_regime,
     detect_one_location,
     get_roll_percentile_parameters,
     run_detect,
@@ -53,6 +54,20 @@ class TestDetectEngine(unittest.TestCase):
         self.assertEqual(february["interval_days"], 14)
         self.assertIsNone(missing)
 
+    def test_regime_matrix_covers_key_count_duration_combinations(self):
+        expected = {
+            ("LOW", "LOW"): "AVOIDANCE",
+            ("LOW", "HIGH"): "BLOCKAGE",
+            ("HIGH", "HIGH"): "CONGESTION",
+            ("HIGH", "LOW"): "HIGH_THROUGHPUT",
+            ("NORMAL", "NORMAL"): "NORMAL",
+            ("MIXED", "NORMAL"): "VOLATILE",
+            ("UNKNOWN", "UNKNOWN"): "UNKNOWN",
+        }
+        for directions, regime in expected.items():
+            with self.subTest(directions=directions):
+                self.assertEqual(classify_regime(*directions), regime)
+
     def test_detect_one_location_returns_no_data_for_empty_signals(self):
         detector = Mock(spec=RollingPercentileDetector)
 
@@ -72,6 +87,9 @@ class TestDetectEngine(unittest.TestCase):
         self.assertIsNone(result["quantile_25"])
         self.assertIsNone(result["quantile_75"])
         self.assertIsNone(result["quantile_90"])
+        self.assertIsNone(result["ratio_low"])
+        self.assertIsNone(result["ratio_high"])
+        self.assertEqual(result["direction"], "UNKNOWN")
         self.assertIsNone(result["anomaly_ratio"])
         detector.detect.assert_not_called()
 
@@ -87,6 +105,9 @@ class TestDetectEngine(unittest.TestCase):
             "quantile_25": 12.0,
             "quantile_75": 28.0,
             "quantile_90": 30.0,
+            "ratio_low": 0.0,
+            "ratio_high": 0.0,
+            "direction": "NORMAL",
             "anomaly_ratio": 0.0,
         }
 
@@ -116,6 +137,9 @@ class TestDetectEngine(unittest.TestCase):
                 "quantile_25": 12.0,
                 "quantile_75": 28.0,
                 "quantile_90": 30.0,
+                "ratio_low": 0.0,
+                "ratio_high": 0.0,
+                "direction": "NORMAL",
                 "anomaly_ratio": 0.0,
             },
         )
@@ -140,10 +164,10 @@ class TestDetectEngine(unittest.TestCase):
                             INSERT INTO {source_table}
                                 ({name_col}, date_id, ship_cnt, duration)
                             VALUES
-                                (:name, 20260201, 20, 1),
-                                (:name, 20260202, 20, 1),
-                                (:name, 20260203, 30, 1),
-                                (:name, 20260204, 30, 1)
+                                (:name, 20260201, 20, 20),
+                                (:name, 20260202, 20, 20),
+                                (:name, 20260203, 30, 30),
+                                (:name, 20260204, 30, 30)
                         """),
                         {"name": location_name},
                     )
@@ -159,6 +183,8 @@ class TestDetectEngine(unittest.TestCase):
                         text("""
                             INSERT INTO m_roll_percentile_parameter VALUES
                                 (:location_type, :location_name, 'ship_cnt',
+                                 20260201, NULL, 15, 25, 0.4, 4, 'OK'),
+                                (:location_type, :location_name, 'duration',
                                  20260201, NULL, 15, 25, 0.4, 4, 'OK')
                         """),
                         {"location_type": app_type, "location_name": location_name},
@@ -178,7 +204,14 @@ class TestDetectEngine(unittest.TestCase):
                 self.assertEqual(result[0]["quantile_10"], 15.0)
                 self.assertEqual(result[0]["quantile_90"], 25.0)
                 self.assertEqual(result[0]["anomaly_ratio"], 0.5)
+                self.assertEqual(result[0]["ratio_low"], 0.0)
+                self.assertEqual(result[0]["ratio_high"], 0.5)
+                self.assertEqual(result[0]["direction"], "HIGH")
                 self.assertEqual(result[0]["anomaly_flag"], FLAG.ANOMALY)
+                self.assertEqual(result[0]["duration_anomaly_flag"], FLAG.ANOMALY)
+                self.assertEqual(result[0]["duration_direction"], "HIGH")
+                self.assertEqual(result[0]["duration_status"], "OK")
+                self.assertEqual(result[0]["regime"], "CONGESTION")
 
     def test_rp_detect_engine(self):
         engine = Mock()

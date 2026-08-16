@@ -303,10 +303,20 @@ workflow:
         prompt_template:
         - id: 8fd0f5bd-8f5b-4d46-82e5-5f11dc50b760
           role: system
-          text: "你是一个信息提取助手。从用户的问题中提取以下信息：\n- 年份 (year)\n- 月份 (month) \n- 日期 (day),如果没有如数日期,则默认输入当月最后一天\n\
-            - 地点/通道名称 (location)\n\n请以JSON格式返回提取的信息：\n{\n  \"year\": \"YYYY\",\n \
-            \ \"month\": \"MM\",\n  \"day\": \"DD\"\n  \"location\": \"地点名称\",\n \
-            \ \"question\": \"是否异常?\"\n}"
+          text: |
+            你是一个信息提取助手。从用户问题中提取：
+            - 年份（year）
+            - 月份（month）
+            - 日期（day）；如果没有具体日期，使用当月最后一天
+            - 地点或通道名称（location）
+
+            只返回结构化字段，不要补充解释。示例：
+            {
+              "year": "2026",
+              "month": "07",
+              "day": "21",
+              "location": "英吉利海峡"
+            }
         - id: d69decd2-29c6-47dd-8690-0634e8d3a35a
           role: user
           text: '{{#sys.query#}}'
@@ -330,6 +340,7 @@ workflow:
             required:
             - year
             - month
+            - day
             - location
             type: object
         structured_output_enabled: true
@@ -373,57 +384,57 @@ workflow:
         cases:
         - case_id: 'true'
           conditions:
-          - comparison_operator: '='
+          - comparison_operator: is
             id: ae0fd3c6-b2c8-423e-b748-c5279595c63f
-            value: '1'
-            varType: number
+            value: ANOMALY
+            varType: string
             variable_selector:
             - '1770528546254'
-            - anomaly_flag
+            - route
           id: 'true'
           logical_operator: and
         - case_id: a1beeae6-6cc0-41a9-b176-f0bd3dd21db6
           conditions:
-          - comparison_operator: '='
+          - comparison_operator: is
             id: 3c877e1e-dc19-4822-92b2-d1c15b1bf4ff
-            value: '0'
-            varType: number
+            value: NORMAL
+            varType: string
             variable_selector:
             - '1770528546254'
-            - anomaly_flag
+            - route
           id: a1beeae6-6cc0-41a9-b176-f0bd3dd21db6
           logical_operator: and
         - case_id: 1547faa2-b830-473e-bee8-15c74fadcaaa
           conditions:
-          - comparison_operator: '='
+          - comparison_operator: is
             id: e17e8004-c4fa-4181-bd95-bf8d433a2f3b
-            value: '2'
-            varType: number
+            value: PARTIAL_DATA
+            varType: string
             variable_selector:
             - '1770528546254'
-            - anomaly_flag
+            - route
           id: 1547faa2-b830-473e-bee8-15c74fadcaaa
           logical_operator: and
         - case_id: f4676198-fa0e-4dbb-9818-717cfc6820d8
           conditions:
-          - comparison_operator: '='
+          - comparison_operator: is
             id: 45066cde-fbf5-4831-94ff-8442bf8cb6d9
-            value: '3'
-            varType: number
+            value: DATA_ISSUE
+            varType: string
             variable_selector:
             - '1770528546254'
-            - anomaly_flag
+            - route
           id: f4676198-fa0e-4dbb-9818-717cfc6820d8
           logical_operator: and
         - case_id: 842e139d-7854-4ec8-9aa0-4d77396f9552
           conditions:
-          - comparison_operator: '='
+          - comparison_operator: is
             id: 9be96aef-6551-48e9-9daa-5d7842ced57d
-            value: '4'
-            varType: number
+            value: false
+            varType: boolean
             variable_selector:
             - '1770528546254'
-            - anomaly_flag
+            - success
           id: 842e139d-7854-4ec8-9aa0-4d77396f9552
           logical_operator: and
         selected: false
@@ -443,20 +454,47 @@ workflow:
       type: custom
       width: 241
     - data:
-        code: "import json\n\ndef main(detection_result: str) -> dict:\n    result\
-          \ = json.loads(detection_result)\n    return {\n        \"success\": result.get(\"\
-          success\", False),\n        \"result\": result.get(\"result\", \"\"),\n\
-          \        \"run_date\": result.get(\"run_date\", \"\"),\n        \"pipe_name\"\
-          : result.get(\"pipe_name\", \"\"),\n        \"if_anomaly\": result.get(\"\
-          if_anomaly\", False),\n        \"anomaly_flag\": result.get(\"anomaly_flag\"\
-          , -1),\n        \"flag_name\": result.get(\"flag_name\", \"\"),\n      \
-          \  \"quantile_10\": result.get(\"quantile_10\", 0.0),\n        \"quantile_25\"\
-          : result.get(\"quantile_25\", 0.0),\n        \"quantile_75\": result.get(\"\
-          quantile_75\", 0.0),\n        \"quantile_90\": result.get(\"quantile_90\"\
-          , 0.0),\n        \"anomaly_ratio\": result.get(\"anomaly_ratio\", 0.0),\n\
-          \    }"
+        code: |
+          import json
+
+          def main(detection_result: str) -> dict:
+              result = json.loads(detection_result)
+
+              def number(name: str, default: float = 0.0):
+                  value = result.get(name)
+                  return default if value is None else value
+
+              return {
+                  "success": result.get("success", False),
+                  "result": result.get("result", ""),
+                  "run_date": result.get("run_date", ""),
+                  "pipe_name": result.get("pipe_name", ""),
+                  "if_anomaly": result.get("if_anomaly", False),
+                  "route": result.get("route", "DATA_ISSUE"),
+                  "anomaly_flag": number("anomaly_flag", -1),
+                  "flag_name": result.get("flag_name", ""),
+                  "quantile_10": number("quantile_10"),
+                  "quantile_25": number("quantile_25"),
+                  "quantile_75": number("quantile_75"),
+                  "quantile_90": number("quantile_90"),
+                  "anomaly_ratio": number("anomaly_ratio"),
+                  "ratio_low": number("ratio_low"),
+                  "ratio_high": number("ratio_high"),
+                  "direction": result.get("direction", "UNKNOWN"),
+                  "duration_anomaly_flag": number("duration_anomaly_flag", -1),
+                  "duration_quantile_10": number("duration_quantile_10"),
+                  "duration_quantile_25": number("duration_quantile_25"),
+                  "duration_quantile_75": number("duration_quantile_75"),
+                  "duration_quantile_90": number("duration_quantile_90"),
+                  "duration_anomaly_ratio": number("duration_anomaly_ratio"),
+                  "duration_ratio_low": number("duration_ratio_low"),
+                  "duration_ratio_high": number("duration_ratio_high"),
+                  "duration_direction": result.get("duration_direction", "UNKNOWN"),
+                  "duration_status": result.get("duration_status", "NO_DATA"),
+                  "regime": result.get("regime", "UNKNOWN"),
+              }
         code_language: python3
-        desc: parse if_anamaly flag
+        desc: Parse count, duration, regime, and chatbot route
         outputs:
           anomaly_flag:
             children: null
@@ -464,6 +502,39 @@ workflow:
           anomaly_ratio:
             children: null
             type: number
+          direction:
+            children: null
+            type: string
+          duration_anomaly_flag:
+            children: null
+            type: number
+          duration_anomaly_ratio:
+            children: null
+            type: number
+          duration_direction:
+            children: null
+            type: string
+          duration_quantile_10:
+            children: null
+            type: number
+          duration_quantile_25:
+            children: null
+            type: number
+          duration_quantile_75:
+            children: null
+            type: number
+          duration_quantile_90:
+            children: null
+            type: number
+          duration_ratio_high:
+            children: null
+            type: number
+          duration_ratio_low:
+            children: null
+            type: number
+          duration_status:
+            children: null
+            type: string
           flag_name:
             children: null
             type: string
@@ -485,7 +556,19 @@ workflow:
           quantile_90:
             children: null
             type: number
+          ratio_high:
+            children: null
+            type: number
+          ratio_low:
+            children: null
+            type: number
+          regime:
+            children: null
+            type: string
           result:
+            children: null
+            type: string
+          route:
             children: null
             type: string
           run_date:
@@ -567,9 +650,9 @@ workflow:
     - data:
         classes:
         - id: '1'
-          name: 用户想知道某个时间段某通道是否发生了交通异常，例如"2024年1月马六甲海峡有没有异常？"
+          name: 用户想知道某日某通道的通航量、通行时长或综合交通状态是否异常，例如“2026年7月21日英吉利海峡有没有异常？”
         - id: '2'
-          name: 用户想了解异常发生的原因，例如"2023年12月曼德海峡为什么异常？"
+          name: 用户想了解通航量异常、通行延误、拥堵、封锁、绕行或其他综合异常状态发生的原因
         - id: '1771638544243'
           name: 与海峡交通无关的问题，或者打招呼
         instructions: ''
@@ -626,9 +709,9 @@ workflow:
         prompt_template:
         - id: dc6ce8f5-0251-4044-a6fb-634914f92a4e
           role: system
-          text: '你是一个专注于马六甲海峡和曼德海峡交通异常分析的专家助手。
+          text: '你是一个专注于全球主要海峡和航运通道交通异常分析的专家助手。
 
-            你只能回答与这两个海峡的交通异常检测和原因分析相关的问题。
+            你回答与船舶通航量、通行时长、拥堵、延误、绕行、封锁及相关原因分析有关的问题。
 
 
             对于其他问题，请礼貌地说明你的专业范围，并引导用户提问正确的问题。
@@ -636,7 +719,7 @@ workflow:
 
             你可以回答的问题示例：
 
-            - "2024年1月马六甲海峡是否发生了异常？"
+            - "2026年7月21日英吉利海峡是否发生了异常？"
 
             - "2023年12月曼德海峡为什么发生交通异常？"
 
@@ -719,13 +802,13 @@ workflow:
         provider_icon:
           background: '#FEF7C3'
           content: 🕵️
-        provider_id: 3cd916f3-cf7d-4f8b-b26c-33b56ba48fb6
+        provider_id: b37fd50b-04f2-4eb8-9e95-d6ca27d239f1
         provider_name: detectanomoly
         provider_type: api
         selected: false
         title: detectAnomaly
         tool_configurations: {}
-        tool_description: 检测指定日期和通道是否发生交通异常。支持马六甲海峡和曼德海峡
+        tool_description: 分别检测指定日期和通道的船舶通航量与通行时长，并返回综合异常状态
         tool_label: detectAnomaly
         tool_name: detectAnomaly
         tool_node_version: '2'
@@ -785,7 +868,7 @@ workflow:
         provider_icon:
           background: '#FEF7C3'
           content: 🕵️
-        provider_id: 4a9d154a-1e4f-47a2-a2f3-211d0d225eae
+        provider_id: 8f29ae57-f95e-48be-8697-e0b0d9955fbb
         provider_name: analyzeAnomaly
         provider_type: api
         selected: false
@@ -826,17 +909,24 @@ workflow:
         prompt_template:
         - id: 87ce8a18-6467-4789-a78a-10615e4dbb94
           role: system
-          text: 你是一名航运数据分析师，专门分析全球主要海峡的船舶通航情况。 用户会提供某个海峡在某个日期的通航检测结果，该结果为"无异常"。请你根据以下数据，用简洁的中文总结该海峡当日的通航状况：
-            - 海峡名称：{{#1770528546254.pipe_name#}} - 检测日期：{{#1770528546254.run_date#}}
-            - 检测结论：{{#1770528546254.result#}} - 25%分位数（近30日）：{{#1770528546254.quantile_25#}}
-            - 75%分位数（近30日）：{{#1770528546254.quantile_75#}} - 异常比率（近30日异常天数占比）：{{#1770528546254.anomaly_ratio#}}
-            请按以下要求输出分析： 1. 用1-2句话概括当日通航状态正常的原因 2. 结合分位数说明近30日的通航量范围是否稳定 3. 根据异常比率评估该海峡近期的整体通航稳定性
-            4. 如果异常比率大于0，简要提及近期曾出现过异常波动 语气专业简洁，适合作为每日通航简报使用。
+          text: |
+            你是一名航运数据分析师。当前综合状态为 NORMAL，表示船舶通航量和通行时长均未达到异常阈值。
+
+            - 通道：{{#1770528546254.pipe_name#}}
+            - 日期：{{#1770528546254.run_date#}}
+            - 综合状态：{{#1770528546254.regime#}}
+            - 检测结论：{{#1770528546254.result#}}
+            - 通航量方向：{{#1770528546254.direction#}}
+            - 通航量区间：P25={{#1770528546254.quantile_25#}}，P75={{#1770528546254.quantile_75#}}
+            - 通航量低位/高位比率：{{#1770528546254.ratio_low#}} / {{#1770528546254.ratio_high#}}
+            - 通行时长方向：{{#1770528546254.duration_direction#}}
+            - 通行时长区间：P25={{#1770528546254.duration_quantile_25#}}，P75={{#1770528546254.duration_quantile_75#}}
+            - 通行时长低位/高位比率：{{#1770528546254.duration_ratio_low#}} / {{#1770528546254.duration_ratio_high#}}
+
+            请用2-3句中文总结当日状态，并分别说明通航量和通行时长的稳定性。不要把阈值内的小幅波动描述成异常。
         - id: 4878c381-cd4c-4570-a587-18fa09641069
           role: user
-          text: 请分析 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的通航情况。
-            当日检测结果为正常，25%分位数为 {{#1770528546254.quantile_25#}}，75%分位数为 {{#1770528546254.quantile_75#}}，近30日异常比率为
-            {{#1770528546254.anomaly_ratio#}}。
+          text: 请生成 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的正常通航简报，综合状态为 {{#1770528546254.regime#}}。
         selected: false
         title: NORMALSUMMARY
         type: llm
@@ -868,59 +958,29 @@ workflow:
         prompt_template:
         - id: ba240e67-63bf-48d1-a163-555f6c413495
           role: system
-          text: '你是一名航运数据质量分析师，负责评估全球主要海峡的通航数据质量问题。
+          text: |
+            你是一名航运数据质量分析师。当前路由为 PARTIAL_DATA 或 DATA_ISSUE，不能把缺失或不可用的数据误报成“正常”，也不能把物理上的零流量直接等同于数据采集故障。
 
-
-            当检测系统发现数据异常时，你需要根据异常标识（anomaly_flag）和相关数据，用简洁的中文说明数据问题及可能的原因。
-
-
-            - 海峡名称：{{#1770528546254.pipe_name#}}
-
-            - 检测日期：{{#1770528546254.run_date#}}
-
-            - 异常标识：{{#1770528546254.anomaly_flag#}}
-
-            - 标识说明：{{#1770528546254.flag_name#}}
-
+            - 通道：{{#1770528546254.pipe_name#}}
+            - 日期：{{#1770528546254.run_date#}}
+            - 路由：{{#1770528546254.route#}}
+            - 综合状态：{{#1770528546254.regime#}}
             - 检测结论：{{#1770528546254.result#}}
+            - 通航量标识：{{#1770528546254.anomaly_flag#}}（{{#1770528546254.flag_name#}}）
+            - 通航量方向：{{#1770528546254.direction#}}
+            - 通航量低位/高位比率：{{#1770528546254.ratio_low#}} / {{#1770528546254.ratio_high#}}
+            - 通行时长标识：{{#1770528546254.duration_anomaly_flag#}}
+            - 通行时长状态：{{#1770528546254.duration_status#}}
+            - 通行时长方向：{{#1770528546254.duration_direction#}}
+            - 通行时长低位/高位比率：{{#1770528546254.duration_ratio_low#}} / {{#1770528546254.duration_ratio_high#}}
 
-            - 25%分位数（近1年）：{{#1770528546254.quantile_25#}}
-
-            - 75%分位数（近1年）：{{#1770528546254.quantile_75#}}
-
-            - 10%分位数（近1年）：{{#1770528546254.quantile_10#}}
-
-            - 90%分位数（近1年）：{{#1770528546254.quantile_90#}}
-
-            - 异常比率（近30日）：{{#1770528546254.anomaly_ratio#}}
-
-
-            异常标识含义：
-
-            - anomaly_flag = 2（NO_DATA）：当日无任何通航记录，船舶通行数为0
-
-            - anomaly_flag = 3（FLAT_DATA）：10%分位数与90%分位数非0但相等，数据方差不足，无法有效判断异常
-
-            - anomaly_flag = 4（INSUFFICIENT_DATA）：10%与90%分位数均小于3艘，通航量过低，不列入异常判断
-
-
-            请按以下要求输出分析：
-
-            1. 明确指出属于哪种数据问题（无数据/数据平坦/数据不足）
-
-            2. 分析可能导致此数据问题的原因（如AIS信号中断、海峡封锁、数据采集故障、航道本身流量极低等）
-
-            3. 给出数据质量建议（如建议核查数据源、调整检测阈值、人工确认等）
-
-            4. 用1句话总结该数据问题的风险等级（低/中/高）
-
-
-            语气专业简洁，适合作为数据质量报告使用。'
+            如果 route=PARTIAL_DATA，明确指出哪一个指标仍可用、哪一个指标不可用，并只对可用指标下结论。
+            如果 route=DATA_ISSUE，说明无法可靠判断的原因，并建议核查参数、AIS数据源和当日原始记录。
+            anomaly_flag=2 表示无可用通航量数据；3 表示数据平坦；4 表示样本或流量不足。
+            输出2-4句专业、谨慎的中文说明。
         - id: bb8f2dc5-81a8-4a3e-914c-71919649c876
           role: user
-          text: 请分析 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的数据质量问题。
-            异常标识为 {{#1770528546254.anomaly_flag#}}（{{#1770528546254.flag_name#}}），检测结论：{{#1770528546254.result#}}。
-            近30日分位数：P10={{#1770528546254.quantile_10#}}，P25={{#1770528546254.quantile_25#}}，P75={{#1770528546254.quantile_75#}}，P90={{#1770528546254.quantile_90#}}，30日内异常比率={{#1770528546254.anomaly_ratio#}}。
+          text: 请根据 route={{#1770528546254.route#}} 和 regime={{#1770528546254.regime#}}，说明 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的数据可用性和可下结论范围。
         retry_config:
           max_retries: 3
           retry_enabled: true

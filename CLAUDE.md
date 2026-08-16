@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS log_agent_worklog (
 ```
 
 Also created by `setup_schema()`: `m_pipe_anomaly_roll_percentile`,
-`m_roll_percentile_parameter`, `dim_anomaly_flag` (seeded from
+`m_roll_percentile_parameter`, `m_roll_percentile_monitor`, `dim_anomaly_flag` (seeded from
 `ROLLING_PERCENTILE_FLAG`), and the view `vw_m_pipe_anomaly_roll_percentile`.
 
 `m_roll_percentile_parameter` holds the frozen detection bounds per
@@ -136,6 +136,36 @@ Also created by `setup_schema()`: `m_pipe_anomaly_roll_percentile`,
 instead of recomputing quantiles per run. Rows with `is_locked = 1` are manual overrides
 and must not be overwritten by the refit job. See
 `docs/plan-duration-aware-detector.md`.
+
+Automated rows use `fit_method='percentile_10_90_holdout'`. The latest 30 scoring
+observations are chronological validation data. Ship-count validation includes zeros,
+while percentile bounds use only the earlier positive training block. Duration
+validation excludes the same unusable observations as serving. `training_sample_size`,
+the `calibration_*` date/sample fields, and requested/realized calibration flag rates
+preserve that split for auditing.
+
+Production fitting applies a `20260101` history floor to the sparse ports 南沙港,
+阿布扎比港, 杰贝阿里, and 德班港 so recent-N fitting cannot cross the preceding
+coverage/regime break. A later CLI `--fit_start` wins; historical `--as_of` fits before
+the configured boundary are unaffected.
+
+`m_pipe_anomaly_roll_percentile` stores directional ship-count results in `ratio_low`,
+`ratio_high`, and `direction` (`NORMAL`, `LOW`, `HIGH`, `MIXED`, or `UNKNOWN`). It also
+stores the parallel `duration_*` result fields, `duration_status`, and the combined
+count/duration `regime`. The count `anomaly_ratio` remains a compatibility field.
+Results are keyed by `(location_type, pipe_name, date_id)`; `pipe_name` remains the
+compatibility column name but can contain either a pipe or port name. This prevents a
+same-name pipe and port from replacing each other.
+`setup_schema()` adds missing result columns to existing SQLite databases and
+recreates the result view; historical rows retain NULL duration/regime fields until
+detection is rerun.
+
+`m_roll_percentile_monitor` stores idempotent daily monitoring snapshots by location
+type, location, metric, and direction (`ANY`, `LOW`, `HIGH`, or `MIXED`). Monitoring
+uses only results on or after the effective parameter's `valid_from_date_id`, requires
+30 eligible observations before alerting, and defaults to an alert boundary of
+`max(10%, 2 × calibration_target_flag_rate)`. `traffic_detect()` refreshes the snapshot
+after saving detection results; `main_monitor_roll_percentile.py --dry_run` previews it.
 
 `sail_time_in_pipe` is a legacy import from 中国航运数据库 (2023–2025), not created or
 written by any code. Do not confuse it with `ship_cnt_in_pipe.duration`.
@@ -155,6 +185,8 @@ metrics share one row, so `main_sync_bci_data.py` routes **per item** via `ZBXX_
 The request groups (`101-0003,101-0004`) are API batching only and must **not** be used
 to pick the target table. Writes use `INSERT ... ON CONFLICT ... DO UPDATE` on a single
 column: `INSERT OR REPLACE` would delete the row and null out the sibling metric.
+`巴拿马运河` and `苏伊士运河` are pipe-only locations: retain their `101-0003` /
+`101-0004` items and reject any same-named `101-0001` / `101-0002` port items.
 
 ## Cross-Container Networking
 

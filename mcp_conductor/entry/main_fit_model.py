@@ -10,11 +10,13 @@ Usage:
     uv run python mcp_conductor/entry/main_fit_model.py
     uv run python mcp_conductor/entry/main_fit_model.py --dry_run
     uv run python mcp_conductor/entry/main_fit_model.py --location_type pipe --metric duration
+    uv run python mcp_conductor/entry/main_fit_model.py --holdout_records 30 --dry_run
 """
 import argparse
 import logging
 
 from mcp_conductor.detector.roll_percentile.fit import (
+    DEFAULT_HOLDOUT_RECORDS,
     DEFAULT_RECENT_RECORDS,
     LOCATION_SPECS,
     STATUS_OK,
@@ -33,19 +35,23 @@ def fit_model(
     location_type: str | None = None,
     metric: str | None = None,
     persist: bool = True,
+    holdout_records: int = DEFAULT_HOLDOUT_RECORDS,
 ) -> list[dict]:
     """
     Fit parameters across every location type and metric.
 
     Args:
-        recent_records: usable (non-zero) observations per location; 0 = all available.
+        recent_records: total training-plus-validation budget per location; training
+                        is positive-only and ship-count validation retains zeros.
         as_of_date_id : YYYYMMDD; ignore data after this date. Defaults per table to the
                         latest date present.
-        fit_start     : optional YYYYMMDD floor, to stop a sparse location reaching back
-                        across a known regime break.
+        fit_start     : optional global YYYYMMDD floor. Built-in location-specific
+                        floors still apply, and the later applicable floor wins.
         location_type : restrict to 'pipe' or 'port'; default fits both.
         metric        : restrict to 'ship_cnt' or 'duration'; default fits both.
         persist       : set False to compute without writing.
+        holdout_records: latest scoring observations reserved for threshold calibration;
+                         ship-count zeros are included.
 
     Returns:
         Flat list of per-location fit results across every type/metric combination.
@@ -64,6 +70,7 @@ def fit_model(
                     as_of_date_id=as_of_date_id,
                     fit_start=fit_start,
                     persist=persist,
+                    holdout_records=holdout_records,
                 )
             )
 
@@ -83,16 +90,22 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the fitting CLI parser separately so argument behaviour is testable."""
     parser = argparse.ArgumentParser(description="Fit rolling-percentile detection parameters")
     parser.add_argument("--recent_records", type=int, default=DEFAULT_RECENT_RECORDS,
-                        help=f"Usable records per location (default {DEFAULT_RECENT_RECORDS}); 0 = all")
+                        help=f"Training-plus-validation budget (default {DEFAULT_RECENT_RECORDS}); 0 = all training history")
     parser.add_argument("--as_of", type=int, default=None,
                         help="Ignore data after this date (YYYYMMDD); default = latest available")
     parser.add_argument("--fit_start", type=int, default=None,
-                        help="Optional floor (YYYYMMDD) to avoid reaching across a regime break")
+                        help="Optional global floor (YYYYMMDD); later location floors still apply")
     parser.add_argument("--location_type", choices=sorted(LOCATION_SPECS), default=None,
                         help="Restrict to one location type; default fits both")
     parser.add_argument("--metric", choices=list(VALID_METRICS), default=None,
                         help="Restrict to one metric; default fits both")
     parser.add_argument("--dry_run", action="store_true", help="Compute without writing")
+    parser.add_argument(
+        "--holdout_records",
+        type=int,
+        default=DEFAULT_HOLDOUT_RECORDS,
+        help=f"Latest scoring records reserved for calibration (default {DEFAULT_HOLDOUT_RECORDS}); count zeros included",
+    )
     return parser
 
 
@@ -107,6 +120,7 @@ def main(argv: list[str] | None = None) -> list[dict]:
         location_type=args.location_type,
         metric=args.metric,
         persist=not args.dry_run,
+        holdout_records=args.holdout_records,
     )
 
 

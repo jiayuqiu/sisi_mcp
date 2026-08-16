@@ -11,7 +11,7 @@ Everything you need to get SISI up and running, in order.
 | 3 | Generate a **Dify API key** (Section 2.1) | ☐ |
 | 4 | Fill in `sisimcp/.env` with your API keys (Section 2.2) | ☐ |
 | 5 | Run `docker compose up -d` inside `sisimcp/docker/` (Section 2.3) | ☐ |
-| 6 | Import chatflow & workflow YAML files into Dify (Section 2.4) | ☐ |
+| 6 | Import chatflow & workflow YAML files into Dify (Section 2.5) | ☐ |
 | 7 | Open **http://localhost:3000** in your browser (Section 3) | ☐ |
 
 ### Keys you will need before starting
@@ -107,23 +107,61 @@ This starts three containers:
 | `sisimcp-dify-api` | 8002 | Dify integration API |
 | `sisimcp-frontend-nextjs` | 3000 | Next.js web frontend |
 
-### 2.4 Import Dify chatflow & workflow & custom tools
+### 2.4 Detector fitting and monitoring
 
-#### 2.4.1 Import apps
+After schema setup and data synchronization, preview and persist fitted parameters:
+
+```bash
+uv run python mcp_conductor/entry/main_setup_schema.py
+uv run python mcp_conductor/entry/main_fit_model.py --dry_run
+uv run python mcp_conductor/entry/main_fit_model.py
+```
+
+Every traffic detection run now refreshes the corrected-threshold monitoring snapshot.
+It can also be inspected independently:
+
+```bash
+uv run python mcp_conductor/entry/main_monitor_roll_percentile.py --dry_run
+uv run python mcp_conductor/entry/main_monitor_roll_percentile.py
+```
+
+Snapshots remain `WARMING_UP` until 30 eligible results have accumulated under the
+current parameter version.
+
+To rebuild a historical range without future-data leakage, use the chronological
+pipeline. It fits through the previous day, detects the current day, and refreshes
+monitoring automatically. Source synchronization and Dify are intentionally excluded:
+
+```bash
+uv run python -m mcp_conductor.entry.main_rebuild_detection \
+  --start-date 2026-05-01 --end-date 2026-08-01 --dry-run
+
+uv run python -m mcp_conductor.entry.main_rebuild_detection \
+  --start-date 2026-05-01 --end-date 2026-08-01
+```
+
+The persistent run creates a timestamped SQLite backup in `data/backups/` first.
+Because the historical pipeline creates one parameter version per day, its
+version-aware monitoring snapshots normally remain `WARMING_UP`. Use less frequent
+production refits when monitoring needs 30 results under the same parameter version.
+
+### 2.5 Import Dify chatflow & workflow & custom tools
+
+#### 2.5.1 Import apps
 
 ![Import config yaml](images/import_app_yaml.png)
 
 - Import `mcp_conductor/resources/dify/sisi_expert_chat.yml` as a **Chatflow**
 - Import `mcp_conductor/resources/dify/sisi_expert_workflow.yml` as a **Workflow**
 
-#### 2.4.2 Register custom tools
+#### 2.5.2 Register custom tools
 
 ![Click create custom tool](images/create_custom_tool_step_1.png)
 ![Config tool](images/create_custom_tool_step_2.png)
 
 Tool config files are located under `mcp_conductor/resources/dify/`.
 
-#### 2.4.3 Troubleshooting: custom tool nodes lose input parameters
+#### 2.5.3 Troubleshooting: custom tool nodes lose input parameters
 
 In this version of Dify, custom tool nodes may lose their input parameter settings after import. If this happens:
 
@@ -160,11 +198,13 @@ Open your browser and navigate to:
 
 ### Workflow Inspector features
 
-- **通航船数量 chart** — interactive area chart of ship counts per channel (`ship_cnt_in_pipe` table)
+- **数量/时长 chart** — interactive ship-count area plus average-duration line per
+  channel or port
 - **海峡 selector** — switch between channels (马六甲海峡, 曼德海峡, etc.)
 - **Time window buttons** — quickly select 1M / 3M / 6M / 1Y / All
 - **Date range pickers** — set a custom start and end date
-- **Anomaly markers** — red dots on the chart for dates flagged as anomalous (detection_flag = 红)
+- **Directional anomaly markers** — distinguish `LOW`, `HIGH`, and `MIXED` count and
+  duration anomalies and show the combined regime in the tooltip
 - **Agent call log cards** — paginated list of DeepSeek agent call history with reasoning
 
 ---

@@ -1,174 +1,249 @@
-# sisimcp - Traffic Detection MCP Server
+# sisimcp — 航运交通异常检测平台
 
-## 介绍 / Introduction
+> Version 0.1.0
 
-sisimcp 是一个用于检测海峡交通拥堵的 MCP (Model Context Protocol) 服务器。它可以分析船舶数量数据，结合天气和新闻信息，判断马六甲海峡和曼德海峡是否发生拥堵。
+sisimcp 是一个面向海峡、运河和港口的航运交通检测平台。它同步船舶数量与
+平均通行/停泊时长，使用日期生效的滚动百分位参数分别检测两个指标，并将方向
+组合为可解释的交通状态。项目同时提供 MCP 服务、Dify 集成 API、Dify Chatflow
+和 Next.js 可视化界面。
 
-sisimcp is an MCP (Model Context Protocol) server for detecting traffic congestion in shipping channels. It analyzes vessel count data combined with weather and news information to determine if congestion has occurred in the Malacca Strait and Mandeb Strait.
+sisimcp detects shipping traffic anomalies across channels, canals, and ports. It
+scores vessel count and average duration independently, then combines their directions
+into an explainable traffic regime.
+
+详细部署教程请参阅 [快速开始](docs/quick-start.md)。英文说明见
+[README.en.md](README.en.md)。
+
+## 主要功能 / Highlights
+
+- **双指标检测**：同时检测 `ship_cnt`（船舶数量）和 `duration`（平均时长）。
+- **日期生效参数**：按地点、指标和生效日期保存拟合参数，避免历史检测使用未来数据。
+- **方向输出**：异常标记区分 `LOW`、`HIGH`、`MIXED`、`NORMAL` 和 `UNKNOWN`。
+- **组合状态**：将数量与时长方向组合为 `CONGESTION`、`BLOCKAGE`、
+  `AVOIDANCE`、`HIGH_THROUGHPUT`、`DELAY` 等状态。
+- **实时监控**：按地点、指标和方向跟踪异常率，并识别阈值偏移。
+- **可重复回建**：按日执行 D-1 拟合和 D 日检测，支持 SQLite 备份和 dry run。
+- **Dify 集成**：提供异常检测、原因分析、工作日志以及工作流部署工具。
+- **可视化**：在同一图表显示船舶数量、平均时长、方向异常和组合状态。
 
 ## 架构 / Architecture
 
-- **MCP Server**: `mcp_server.py` - 主要的 MCP 服务器，暴露两个工具供 Copilot 调用
-- **Detection Engine**: `mcp_conductor/detector/` - 基于变点检测的拥堵分析引擎
-- **AI Platforms**: `mcp_conductor/ai_platforms/` - 集成 DeepSeek 和 SISI-AI 进行网络搜索和文本处理
-- **Data**: `data/pipe/` - 通道船舶数量数据（CSV 格式）
+| 组件 | 路径 | 说明 |
+|---|---|---|
+| MCP HTTP Server | `mcp_conductor/servers/mcp_server_http.py` | FastMCP streamable HTTP 服务，转发 Dify Chatflow |
+| Dify API Server | `mcp_conductor/servers/dify_api_server.py` | 检测、分析和工作日志 API |
+| Detection Engine | `mcp_conductor/detector/` | 滚动百分位拟合、检测、状态分类和监控 |
+| Pipeline Entries | `mcp_conductor/entry/` | 数据同步、建表、拟合、检测、回建和 Dify 部署 CLI |
+| Frontend | `frontend_nextjs/` | Chatbot、工作流日志和数量/时长图表 |
+| Database | `data/sisi.sqlite` | 观测数据、参数版本、检测结果和监控快照 |
+| Dify Resources | `mcp_conductor/resources/dify/` | Chatflow DSL 与自定义工具 OpenAPI 定义 |
 
-## 安装 / Installation
+## 快速启动 / Quick Start
 
-1. 安装依赖 / Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### 1. 环境要求
 
-2. 配置环境变量 / Configure environment variables:
-创建 `.env` 文件或设置必要的 API 密钥。
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- Node.js（仅本地运行前端时需要）
+- Docker 与 Docker Compose（推荐）
+- 已运行且 Docker 网络名为 `sisi-dify-platform_default` 的 Dify 实例
 
-3. VS Code 配置 / VS Code Configuration:
-MCP 服务器已在 `.vscode/settings.json` 中配置，VS Code Copilot 会自动发现并使用它。
-
-## 使用方法 / Usage
-
-### 方式 1：通过 Copilot 聊天调用 / Method 1: Call via Copilot Chat
-
-启动 VS Code 后，MCP 服务器会自动加载。你可以在 Copilot 聊天中直接提问：
-
-After starting VS Code, the MCP server will load automatically. You can ask questions directly in Copilot Chat:
-
-**示例问题 / Example Questions:**
-
-```
-请问，2023年12月 曼德海峡 是否发生拥堵？
-
-请问，2023年4月 马六甲海峡 是否发生拥堵？
-
-检测 2023-12-31 曼德海峡的交通情况
-
-Check traffic congestion in Malacca Strait on 2023-04-30
-```
-
-### 方式 2：直接运行 MCP 服务器 / Method 2: Run MCP Server Directly
+### 2. 安装依赖
 
 ```bash
-python mcp_server.py
+uv sync
 ```
 
-服务器将通过 stdio 与客户端通信 / The server will communicate with clients via stdio.
+### 3. 配置环境变量
 
-### 方式 3：使用原始检测脚本 / Method 3: Use Original Detection Script
+在仓库根目录创建 `.env`，根据使用场景设置以下变量：
+
+```dotenv
+# BCI 数据同步
+BCI_BASE_URL=
+BCI_APP_ID=
+BCI_SECRET_KEY=
+BCI_SYNC_START_DATE=2026-01-01
+
+# AI 分析
+DEEPSEEK_API_KEY=
+SISI_API_KEY=
+
+# Dify 应用调用
+DIFY_CHATFLOW_URL=http://localhost/v1
+DIFY_API_KEY=
+
+# 可选：自动部署 Dify 工作流
+DIFY_CONSOLE_API_URL=http://localhost:7080/console/api
+DIFY_ADMIN_API_KEY=
+DIFY_WORKSPACE_ID=
+DIFY_APP_ID=
+```
+
+不要提交包含真实密钥的 `.env` 文件。
+
+### 4. 启动服务
 
 ```bash
-python -m mcp_conductor.entry.main_traffic_detect --run_date 2023-12-31 --pipe 曼德海峡
+cd docker
+docker compose up -d --build
+docker compose ps
 ```
 
-### 方式 4：使用 Flask API（备用）/ Method 4: Use Flask API (Alternative)
+默认端口：
+
+| 服务 | 地址 |
+|---|---|
+| Next.js frontend | `http://localhost:3001` |
+| Dify integration API | `http://localhost:8002` |
+| MCP streamable HTTP | `http://localhost:8010` |
+
+## 数据与检测工作流 / Detection Workflow
+
+首次运行时创建或升级 SQLite schema：
 
 ```bash
-python flask_server.py
+uv run python -m mcp_conductor.entry.main_setup_schema
 ```
 
-访问 / Access:
-- `http://localhost:5000/detect?run_date=2023-12-31&pipe=曼德海峡`
-- `http://localhost:5000/run-queries` - 运行预定义查询
+同步 BCI 数据：
 
-## MCP 工具 / MCP Tools
-
-MCP 服务器提供两个工具 / The MCP server provides two tools:
-
-### 1. `detect_traffic_congestion`
-
-检测指定日期和通道的交通拥堵情况。
-
-**参数 / Parameters:**
-- `run_date` (string, required): 日期格式 YYYY-MM-DD / Date in format YYYY-MM-DD
-- `pipe_name` (string, required): 通道名称 / Channel name
-  - 可选值 / Options: `马六甲海峡`, `曼德海峡`, `马六甲`
-
-**示例 / Example:**
-```json
-{
-  "run_date": "2023-12-31",
-  "pipe_name": "曼德海峡"
-}
+```bash
+uv run python -m mcp_conductor.entry.main_sync_bci_data \
+  --start-date 2026-01-01 --end-date 2026-08-01
 ```
 
-### 2. `ask_traffic_question`
+先预览、再保存滚动百分位参数：
 
-使用自然语言提问交通拥堵情况，系统会自动解析日期和通道信息。
-
-**参数 / Parameters:**
-- `question` (string, required): 中文问题 / Question in Chinese
-
-**示例 / Example:**
-```json
-{
-  "question": "请问，2023年12月 曼德海峡 是否发生拥堵？"
-}
+```bash
+uv run python -m mcp_conductor.entry.main_fit_model --dry_run
+uv run python -m mcp_conductor.entry.main_fit_model
 ```
 
-## 数据格式 / Data Format
+运行指定日期的检测。检测结果保存后会自动刷新监控快照：
 
-船舶数量数据文件应放在 `data/pipe/` 目录下，文件名格式：
-`【集装箱】通道在港船舶数量YYYY-MM-DD.csv`
+```bash
+uv run python -m mcp_conductor.entry.main_traffic_detect \
+  --run_date 2026-08-01
+```
 
-CSV 文件应包含以下列 / CSV files should contain:
-- 日期 / Date
-- 通道名称 / Channel name
-- 船舶数量 / Vessel count
+单独查看或保存监控快照：
+
+```bash
+uv run python -m mcp_conductor.entry.main_monitor_roll_percentile --dry_run
+uv run python -m mcp_conductor.entry.main_monitor_roll_percentile
+```
+
+按时间顺序回建历史结果，确保每个检测日只使用截至前一天的数据：
+
+```bash
+uv run python -m mcp_conductor.entry.main_rebuild_detection \
+  --start-date 2026-05-01 --end-date 2026-08-01 --dry-run
+
+uv run python -m mcp_conductor.entry.main_rebuild_detection \
+  --start-date 2026-05-01 --end-date 2026-08-01
+```
+
+非 dry-run 回建会先在 `data/backups/` 创建 SQLite 备份。
+
+## 检测结果 / Detection Output
+
+每个地点的结果包含两条检测通道：
+
+| 字段 | 含义 |
+|---|---|
+| `anomaly_flag` / `direction` | 船舶数量异常标记与方向 |
+| `ratio_low` / `ratio_high` | 数量窗口中低于/高于阈值的比例 |
+| `duration_anomaly_flag` / `duration_direction` | 平均时长异常标记与方向 |
+| `duration_ratio_low` / `duration_ratio_high` | 时长窗口中低于/高于阈值的比例 |
+| `duration_status` | 时长通道是否有可用数据与参数 |
+| `regime` | 数量与时长组合后的交通状态 |
+
+示例状态：
+
+| 数量方向 | 时长方向 | 状态 |
+|---|---|---|
+| `HIGH` | `HIGH` | `CONGESTION` |
+| `LOW` | `HIGH` | `BLOCKAGE` |
+| `LOW` | `LOW` | `AVOIDANCE` |
+| `HIGH` | `LOW` | `HIGH_THROUGHPUT` |
+| `NORMAL` | `HIGH` | `DELAY` |
+
+## Dify 工作流部署 / Dify Deployment
+
+部署命令默认只做本地文件和远端目标的只读预检：
+
+```bash
+uv run python -m mcp_conductor.entry.main_deploy_dify_workflow \
+  --workspace-id "$DIFY_WORKSPACE_ID" \
+  --app-id "$DIFY_APP_ID"
+```
+
+确认后更新草稿，或更新并发布：
+
+```bash
+uv run python -m mcp_conductor.entry.main_deploy_dify_workflow \
+  --workspace-id "$DIFY_WORKSPACE_ID" \
+  --app-id "$DIFY_APP_ID" \
+  --apply
+
+uv run python -m mcp_conductor.entry.main_deploy_dify_workflow \
+  --workspace-id "$DIFY_WORKSPACE_ID" \
+  --app-id "$DIFY_APP_ID" \
+  --apply --publish
+```
+
+CLI 会在写入前备份现有 Dify 配置。更多说明见
+[`mcp_conductor/resources/dify/README.md`](mcp_conductor/resources/dify/README.md)。
+
+## 前端开发 / Frontend Development
+
+```bash
+cd frontend_nextjs
+npm install
+npm run dev
+```
+
+本地开发地址为 `http://localhost:3000`。生产构建检查：
+
+```bash
+npm run build
+```
 
 ## 测试 / Testing
 
-运行测试 / Run tests:
+只对项目自身的测试目录运行 pytest：
+
 ```bash
-pytest tests/
+uv run pytest -q tests/
 ```
 
-## 支持的通道 / Supported Channels
+不要在仓库根目录直接运行不带路径的 `pytest`；它也会收集 `dify/` 子模块的
+大型测试套件，而该套件使用独立的依赖和运行环境。DeepSeek、SISI 和 BCI 的在线
+集成测试还需要相应的 API 密钥与网络访问。
 
-- 马六甲海峡 / Malacca Strait
-- 曼德海峡 / Mandeb Strait
+## 生产部署 / Production Deployment
 
-## 技术栈 / Tech Stack
+`pipelines/deploy_prod.sh` 提供 Ubuntu/Debian 主机的受控部署流程，包括：
 
-- **MCP (Model Context Protocol)**: 与 AI 助手（如 Copilot）集成
-- **Python**: 主要编程语言
-- **Pandas**: 数据处理
-- **Ruptures**: 变点检测
-- **DeepSeek API**: 网络搜索和问答
-- **SISI-AI**: 文本总结和翻译
-- **Flask**: 备用 HTTP API
+- 校验目标提交是否为当前生产版本的 fast-forward；
+- 构建镜像、备份 SQLite、升级 schema 并拟合参数；
+- 重建应用容器并检查健康状态；
+- 可选同步 BCI 历史数据和部署 Dify 工作流。
 
-## 配置 / Configuration
+查看完整参数：
 
-MCP 服务器配置位于 `.vscode/settings.json`:
-
-```json
-{
-  "github.copilot.chat.mcp.servers": {
-    "traffic-detection": {
-      "command": "python",
-      "args": ["${workspaceFolder}/mcp_server.py"],
-      "enabled": true
-    }
-  }
-}
+```bash
+bash pipelines/deploy_prod.sh --help
 ```
 
 ## 贡献 / Contributing
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+1. 从 `develop` 创建功能分支。
+2. 提交聚焦且带测试的更改。
+3. 运行 `uv run pytest -q tests/` 和 `npm run build`。
+4. 推送分支并提交合并请求。
 
-## 许可 / License
+## License
 
-请参阅项目许可文件。
-
-## 联系 / Contact
-
-如有问题，请开启 Issue。
-
----
-
-**注意 / Note**: 确保在使用前配置好必要的 API 密钥和环境变量。/ Make sure to configure necessary API keys and environment variables before use.
+请参阅仓库中的许可文件；若未提供许可文件，请在复用或分发前联系维护者。

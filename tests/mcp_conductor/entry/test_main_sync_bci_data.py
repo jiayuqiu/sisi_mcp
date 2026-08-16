@@ -170,6 +170,37 @@ class TestSyncBCIData(unittest.TestCase):
         assert self._query("SELECT ship_cnt FROM ship_cnt_in_pipe") == [(10,)]
         assert self._query("SELECT ship_cnt FROM ship_cnt_in_port") == [(20,)]
 
+    def test_sync_rejects_canals_as_ports_but_keeps_their_pipe_metrics(self):
+        api = _fake_api(
+            strait_rows=[
+                _row("巴拿马运河", "101-0003", "10"),
+                _row("巴拿马运河", "101-0004", "30.5"),
+                _row("苏伊士运河", "101-0003", "8"),
+                _row("苏伊士运河", "101-0004", "42.0"),
+            ],
+            port_rows=[
+                _row("巴拿马运河", "101-0001", "10"),
+                _row("巴拿马运河", "101-0002", "30.5"),
+                _row("苏伊士运河", "101-0001", "8"),
+                _row("苏伊士运河", "101-0002", "42.0"),
+                _row("Test Port", "101-0001", "20"),
+                _row("Test Port", "101-0002", "48.5"),
+            ],
+        )
+
+        result = self._run_sync(api)
+
+        assert result == {"success": True, "inserted_count": 6, "reason": None}
+        assert self._query(
+            "SELECT pipe_name, ship_cnt, duration FROM ship_cnt_in_pipe ORDER BY pipe_name"
+        ) == [
+            ("巴拿马运河", 10, 30.5),
+            ("苏伊士运河", 8, 42.0),
+        ]
+        assert self._query(
+            "SELECT port_name, ship_cnt, duration FROM ship_cnt_in_port"
+        ) == [("Test Port", 20, 48.5)]
+
     def test_sync_bci_data_returns_api_failed_when_all_groups_fail(self):
         result = self._run_sync(FakeMetricsAPIFail)
 
