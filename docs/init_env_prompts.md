@@ -110,7 +110,29 @@ item only as PASS, MISSING, or MISMATCH:
 3. Confirm that neither environment file is tracked by Git.
 ```
 
-## 5. Finish setup
+## 5. Initialize the SQLite database
+
+The tracked `data/sisi_empty.sqlite` file is the schema-only database template.
+If `data/sisi.sqlite` does not exist, create it from the template:
+
+```bash
+test -e data/sisi.sqlite || cp data/sisi_empty.sqlite data/sisi.sqlite
+```
+
+This command deliberately leaves an existing `data/sisi.sqlite` unchanged. The
+backfill workflow will populate the newly created database with source data,
+derived results, and worklog records.
+
+Use this prompt:
+
+```text
+Check whether `data/sisi.sqlite` exists. If it does not exist, copy
+`data/sisi_empty.sqlite` to `data/sisi.sqlite`. Never overwrite an existing
+database. Then verify that the new database passes SQLite's integrity check and
+contains the expected schema before running backfill.
+```
+
+## 6. Finish setup
 
 1. Import the required DSL files into Dify Studio and configure its custom tools
    or MCP servers.
