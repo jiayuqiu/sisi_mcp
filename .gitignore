@@ -141,7 +141,8 @@ cython_debug/
 # project custom settings
 .vscode/
 secrets/
-data/
+data/*
+!data/sisi_empty.sqlite
 tmp/
 private/
 .claude/
