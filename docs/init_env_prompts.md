@@ -8,14 +8,23 @@
 Use this prompt:
 
 ```text
-Load `dify/docker/.env` without displaying secret values. Configure the local
-Dify instance to use `http://localhost:7080`:
+Initialize Dify's environment by copying `dify/docker/.env.example` to
+`dify/docker/.env`. Then configure the new file without displaying secret
+values:
 
+- Set `COMPOSE_PROJECT_NAME=sisi-dify-platform`.
 - Set `TRIGGER_URL=http://localhost:7080`.
 - Set `EXPOSE_NGINX_PORT=7080`.
+- Set `ADMIN_API_KEY_ENABLE=true`.
+- Set `ADMIN_API_KEY=7875060e37d9393f5da0db753974cee96ffbf5cc531eef8204155a4b4da66ccd`.
 - Keep the container-side `NGINX_PORT=80`; only the host-side exposed port changes.
+- Ensure each setting appears exactly once, adding `COMPOSE_PROJECT_NAME` if it
+  is not present in the example file.
 - Do not change unrelated settings or reveal credentials in the response.
 ```
+
+The copy step replaces any existing `dify/docker/.env`, so preserve that file
+first if it contains settings that are still needed.
 
 Start Dify from `dify/docker/`:
 
@@ -48,27 +57,12 @@ The following settings are only needed for automated Dify workflow deployment:
 In `dify/docker/.env`, Dify's actual server settings are named
 `ADMIN_API_KEY_ENABLE` and `ADMIN_API_KEY` (without the `DIFY_` prefix). Set
 `ADMIN_API_KEY_ENABLE=true` there if automated deployment needs admin-key access.
-Keep the admin key private and use a long, randomly generated value.
-
-Generate a new value, for example with `openssl rand -hex 32`, and place the
-exact same value in both files using their respective variable names:
-
-`dify/docker/.env`:
-
-```ini
-ADMIN_API_KEY_ENABLE=true
-ADMIN_API_KEY=<your-new-random-value>
-```
-
-Repository-root `./.env`:
-
-```ini
-DIFY_ADMIN_API_KEY=<the-exact-same-random-value>
-```
-
-Replace the placeholders with the generated value; do not include the `<` or
-`>` characters. `DIFY_ADMIN_API_KEY_ENABLE` in `./.env` is currently unused—the
-effective enable flag is `ADMIN_API_KEY_ENABLE` in `dify/docker/.env`.
+For this local setup, copy the configured `ADMIN_API_KEY` value into
+`DIFY_ADMIN_API_KEY` in the repository-root `./.env` when automated deployment
+is used. `DIFY_ADMIN_API_KEY_ENABLE` in `./.env` is currently unused—the
+effective enable flag is `ADMIN_API_KEY_ENABLE` in `dify/docker/.env`. Keep the
+admin key private and replace it with a newly generated value before using this
+configuration in a shared or externally reachable environment.
 
 ## 3. Replace infrastructure defaults
 
