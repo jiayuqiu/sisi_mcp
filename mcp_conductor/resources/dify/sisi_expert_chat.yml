@@ -9,7 +9,7 @@ dependencies:
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.12@37699cc3d1ea9e006348a7273a514f3ddf60ffb0649dc735c594c8da6a80934b
+    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.18@ef52c8128cefe169e4ea882a8c7d92e6cf0bd4f7da75be644ab6b09a3dcfa4f4
     version: null
 kind: app
 version: 0.5.0
@@ -277,14 +277,14 @@ workflow:
         title: User Input
         type: start
         variables: []
-      height: 73
+      height: 72
       id: '1770517231492'
       position:
-        x: 572.0266844616823
-        y: -175.03680487090259
+        x: 0
+        y: 159
       positionAbsolute:
-        x: 572.0266844616823
-        y: -175.03680487090259
+        x: 0
+        y: 159
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -303,22 +303,11 @@ workflow:
         prompt_template:
         - id: 8fd0f5bd-8f5b-4d46-82e5-5f11dc50b760
           role: system
-          text: |
-            你是一个信息提取助手。从用户问题中提取：
-            - 年份（year）
-            - 月份（month）
-            - 日期（day）；如果没有具体日期，使用当月最后一天
-            - 地点或通道名称（location）
-            - 地点类型（location_type）：海峡/运河/航运通道使用 pipe，港口使用 port
-
-            只返回结构化字段，不要补充解释。示例：
-            {
-              "year": "2026",
-              "month": "07",
-              "day": "21",
-              "location": "英吉利海峡",
-              "location_type": "pipe"
-            }
+          text: "你是一个信息提取助手。从用户问题中提取：\n- 年份（year）\n- 月份（month）\n- 日期（day）；如果没有具体日期，使用当月最后一天\n\
+            - 地点或通道名称（location）\n- 地点类型（location_type）：海峡/运河/航运通道使用 pipe，港口使用 port\n\
+            \n只返回结构化字段，不要补充解释。示例：\n{\n  \"year\": \"2026\",\n  \"month\": \"07\",\n\
+            \  \"day\": \"21\",\n  \"location\": \"英吉利海峡\",\n  \"location_type\":\
+            \ \"pipe\"\n}\n"
         - id: d69decd2-29c6-47dd-8690-0634e8d3a35a
           role: user
           text: '{{#sys.query#}}'
@@ -357,14 +346,14 @@ workflow:
         type: llm
         vision:
           enabled: false
-      height: 88
+      height: 87
       id: llm
       position:
-        x: 643.0829525353627
-        y: 153.02003488570693
+        x: 704
+        y: 114
       positionAbsolute:
-        x: 643.0829525353627
-        y: 153.02003488570693
+        x: 704
+        y: 114
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -376,19 +365,19 @@ workflow:
         title: Answer
         type: answer
         variables: []
-      height: 154
+      height: 138
       id: answer
       position:
-        x: 2155.670272554984
-        y: 137.45556486903473
+        x: 2816
+        y: 84
       positionAbsolute:
-        x: 2155.670272554984
-        y: 137.45556486903473
+        x: 2816
+        y: 84
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
-      width: 241
+      width: 242
     - data:
         cases:
         - case_id: 'true'
@@ -449,60 +438,47 @@ workflow:
         selected: false
         title: IF/ELSE
         type: if-else
-      height: 314
+      height: 315
       id: '1770528175479'
       position:
-        x: 1090.0991990313682
-        y: -19.301405733328025
+        x: 1730
+        y: 0
       positionAbsolute:
-        x: 1090.0991990313682
-        y: -19.301405733328025
+        x: 1730
+        y: 0
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
-      width: 241
+      width: 242
     - data:
-        code: |
-          import json
-
-          def main(detection_result: str) -> dict:
-              result = json.loads(detection_result)
-
-              def number(name: str, default: float = 0.0):
-                  value = result.get(name)
-                  return default if value is None else value
-
-              return {
-                  "success": result.get("success", False),
-                  "result": result.get("result", ""),
-                  "run_date": result.get("run_date", ""),
-                  "pipe_name": result.get("pipe_name", ""),
-                  "location_type": result.get("location_type", "pipe"),
-                  "if_anomaly": result.get("if_anomaly", False),
-                  "route": result.get("route", "DATA_ISSUE"),
-                  "anomaly_flag": number("anomaly_flag", -1),
-                  "flag_name": result.get("flag_name", ""),
-                  "quantile_10": number("quantile_10"),
-                  "quantile_25": number("quantile_25"),
-                  "quantile_75": number("quantile_75"),
-                  "quantile_90": number("quantile_90"),
-                  "anomaly_ratio": number("anomaly_ratio"),
-                  "ratio_low": number("ratio_low"),
-                  "ratio_high": number("ratio_high"),
-                  "direction": result.get("direction", "UNKNOWN"),
-                  "duration_anomaly_flag": number("duration_anomaly_flag", -1),
-                  "duration_quantile_10": number("duration_quantile_10"),
-                  "duration_quantile_25": number("duration_quantile_25"),
-                  "duration_quantile_75": number("duration_quantile_75"),
-                  "duration_quantile_90": number("duration_quantile_90"),
-                  "duration_anomaly_ratio": number("duration_anomaly_ratio"),
-                  "duration_ratio_low": number("duration_ratio_low"),
-                  "duration_ratio_high": number("duration_ratio_high"),
-                  "duration_direction": result.get("duration_direction", "UNKNOWN"),
-                  "duration_status": result.get("duration_status", "NO_DATA"),
-                  "regime": result.get("regime", "UNKNOWN"),
-              }
+        code: "import json\n\ndef main(detection_result: str) -> dict:\n    result\
+          \ = json.loads(detection_result)\n\n    def number(name: str, default: float\
+          \ = 0.0):\n        value = result.get(name)\n        return default if value\
+          \ is None else value\n\n    return {\n        \"success\": result.get(\"\
+          success\", False),\n        \"result\": result.get(\"result\", \"\"),\n\
+          \        \"run_date\": result.get(\"run_date\", \"\"),\n        \"pipe_name\"\
+          : result.get(\"pipe_name\", \"\"),\n        \"location_type\": result.get(\"\
+          location_type\", \"pipe\"),\n        \"if_anomaly\": result.get(\"if_anomaly\"\
+          , False),\n        \"route\": result.get(\"route\", \"DATA_ISSUE\"),\n \
+          \       \"anomaly_flag\": number(\"anomaly_flag\", -1),\n        \"flag_name\"\
+          : result.get(\"flag_name\", \"\"),\n        \"quantile_10\": number(\"quantile_10\"\
+          ),\n        \"quantile_25\": number(\"quantile_25\"),\n        \"quantile_75\"\
+          : number(\"quantile_75\"),\n        \"quantile_90\": number(\"quantile_90\"\
+          ),\n        \"anomaly_ratio\": number(\"anomaly_ratio\"),\n        \"ratio_low\"\
+          : number(\"ratio_low\"),\n        \"ratio_high\": number(\"ratio_high\"\
+          ),\n        \"direction\": result.get(\"direction\", \"UNKNOWN\"),\n   \
+          \     \"duration_anomaly_flag\": number(\"duration_anomaly_flag\", -1),\n\
+          \        \"duration_quantile_10\": number(\"duration_quantile_10\"),\n \
+          \       \"duration_quantile_25\": number(\"duration_quantile_25\"),\n  \
+          \      \"duration_quantile_75\": number(\"duration_quantile_75\"),\n   \
+          \     \"duration_quantile_90\": number(\"duration_quantile_90\"),\n    \
+          \    \"duration_anomaly_ratio\": number(\"duration_anomaly_ratio\"),\n \
+          \       \"duration_ratio_low\": number(\"duration_ratio_low\"),\n      \
+          \  \"duration_ratio_high\": number(\"duration_ratio_high\"),\n        \"\
+          duration_direction\": result.get(\"duration_direction\", \"UNKNOWN\"),\n\
+          \        \"duration_status\": result.get(\"duration_status\", \"NO_DATA\"\
+          ),\n        \"regime\": result.get(\"regime\", \"UNKNOWN\"),\n    }\n"
         code_language: python3
         desc: Parse count, duration, regime, and chatbot route
         outputs:
@@ -551,10 +527,10 @@ workflow:
           if_anomaly:
             children: null
             type: boolean
-          pipe_name:
+          location_type:
             children: null
             type: string
-          location_type:
+          pipe_name:
             children: null
             type: string
           quantile_10:
@@ -599,21 +575,37 @@ workflow:
           - text
           value_type: string
           variable: detection_result
-      height: 80
+      height: 95
       id: '1770528546254'
       position:
-        x: 632.4559619962356
-        y: 559.9625670959725
+        x: 1388
+        y: 110
       positionAbsolute:
-        x: 632.4559619962356
-        y: 559.9625670959725
+        x: 1388
+        y: 110
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     - data:
-        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    data = json.loads(analysis_result)\n\n    success = data.get(\"success\", False)\n    run_date = data.get(\"run_date\", \"\")\n    pipe_name = data.get(\"pipe_name\", \"\")\n\n    conclusion = data.get(\"conclusion\", \"\")\n    weather_factor = data.get(\"weather_factor\", \"\")\n    political_factor = data.get(\"political_factor\", \"\")\n\n    if not conclusion and run_date and pipe_name:\n        conclusion = f\"{run_date.replace('-', '')}日，{pipe_name}发生交通异常\"\n\n    if not weather_factor:\n        weather_factor = \"未检索到显著天气风险信号。\"\n\n    if not political_factor:\n        political_factor = \"未检索到显著政治风险信号。\"\n\n    formatted_output = (\n        \"- 结论\\n\"\n        f\"{conclusion}\\n\\n\"\n        \"- 天气因素\\n\"\n        f\"{weather_factor}\\n\\n\"\n        \"- 政治因素\\n\"\n        f\"{political_factor}\"\n    )\n\n    return {\n        \"success\": success,\n        \"run_date\": run_date,\n        \"pipe_name\": pipe_name,\n        \"conclusion\": conclusion,\n        \"weather_factor\": weather_factor,\n        \"political_factor\": political_factor,\n        \"formatted_output\": formatted_output,\n    }\n"
+        code: "import json\n\ndef main(analysis_result: str) -> dict:\n    data =\
+          \ json.loads(analysis_result)\n\n    success = data.get(\"success\", False)\n\
+          \    run_date = data.get(\"run_date\", \"\")\n    pipe_name = data.get(\"\
+          pipe_name\", \"\")\n\n    conclusion = data.get(\"conclusion\", \"\")\n\
+          \    weather_factor = data.get(\"weather_factor\", \"\")\n    political_factor\
+          \ = data.get(\"political_factor\", \"\")\n\n    if not conclusion and run_date\
+          \ and pipe_name:\n        conclusion = f\"{run_date.replace('-', '')}日，{pipe_name}发生交通异常\"\
+          \n\n    if not weather_factor:\n        weather_factor = \"未检索到显著天气风险信号。\"\
+          \n\n    if not political_factor:\n        political_factor = \"未检索到显著政治风险信号。\"\
+          \n\n    formatted_output = (\n        \"- 结论\\n\"\n        f\"{conclusion}\\\
+          n\\n\"\n        \"- 天气因素\\n\"\n        f\"{weather_factor}\\n\\n\"\n   \
+          \     \"- 政治因素\\n\"\n        f\"{political_factor}\"\n    )\n\n    return\
+          \ {\n        \"success\": success,\n        \"run_date\": run_date,\n  \
+          \      \"pipe_name\": pipe_name,\n        \"conclusion\": conclusion,\n\
+          \        \"weather_factor\": weather_factor,\n        \"political_factor\"\
+          : political_factor,\n        \"formatted_output\": formatted_output,\n \
+          \   }\n"
         code_language: python3
         desc: Parse reason
         outputs:
@@ -647,14 +639,14 @@ workflow:
           - text
           value_type: string
           variable: analysis_result
-      height: 80
+      height: 79
       id: '1770528713574'
       position:
-        x: 1815.7175833555002
-        y: -136.42801026435393
+        x: 2454
+        y: 79
       positionAbsolute:
-        x: 1815.7175833555002
-        y: -136.42801026435393
+        x: 2454
+        y: 79
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -684,14 +676,14 @@ workflow:
         type: question-classifier
         vision:
           enabled: false
-      height: 208
+      height: 207
       id: '1771638435586'
       position:
-        x: 311.79137240260127
-        y: 22.620016767619404
+        x: 342
+        y: 91
       positionAbsolute:
-        x: 311.79137240260127
-        y: 22.620016767619404
+        x: 342
+        y: 91
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -745,14 +737,14 @@ workflow:
         type: llm
         vision:
           enabled: false
-      height: 88
+      height: 87
       id: '1771638654512'
       position:
-        x: 233.71201909052496
-        y: 354.90474523395966
+        x: 704
+        y: 281
       positionAbsolute:
-        x: 233.71201909052496
-        y: 354.90474523395966
+        x: 704
+        y: 281
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -764,14 +756,14 @@ workflow:
         title: other chat anwser
         type: answer
         variables: []
-      height: 102
+      height: 101
       id: '1771638902207'
       position:
-        x: 233.71201909052496
-        y: 516.0015740445863
+        x: 1046
+        y: 274
       positionAbsolute:
-        x: 233.71201909052496
-        y: 516.0015740445863
+        x: 1046
+        y: 274
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -830,14 +822,14 @@ workflow:
             type: mixed
             value: '{{#llm.structured_output#}}'
         type: tool
-      height: 52
+      height: 51
       id: '1775300407435'
       position:
-        x: 632.4559619962356
-        y: 370.8495350898485
+        x: 1046
+        y: 132
       positionAbsolute:
-        x: 632.4559619962356
-        y: 370.8495350898485
+        x: 1046
+        y: 132
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -896,14 +888,14 @@ workflow:
             type: mixed
             value: '{{#llm.structured_output#}}'
         type: tool
-      height: 52
+      height: 51
       id: '1775300657540'
       position:
-        x: 1500.7064927145743
-        y: -136.42801026435393
+        x: 2112
+        y: 93
       positionAbsolute:
-        x: 1500.7064927145743
-        y: -136.42801026435393
+        x: 2112
+        y: 93
       selected: true
       sourcePosition: right
       targetPosition: left
@@ -922,42 +914,55 @@ workflow:
         prompt_template:
         - id: 87ce8a18-6467-4789-a78a-10615e4dbb94
           role: system
-          text: |
-            你是一名航运数据分析师。当前综合状态为 NORMAL，表示船舶通航量和通行时长均未达到异常阈值。
+          text: '你是一名航运数据分析师。当前综合状态为 NORMAL，表示船舶通航量和通行时长均未达到异常阈值。
+
 
             - 通道：{{#1770528546254.pipe_name#}}
+
             - 日期：{{#1770528546254.run_date#}}
+
             - 综合状态：{{#1770528546254.regime#}}
+
             - 检测结论：{{#1770528546254.result#}}
+
             - 通航量方向：{{#1770528546254.direction#}}
+
             - 通航量区间：P25={{#1770528546254.quantile_25#}}，P75={{#1770528546254.quantile_75#}}
+
             - 通航量低位/高位比率：{{#1770528546254.ratio_low#}} / {{#1770528546254.ratio_high#}}
+
             - 通行时长方向：{{#1770528546254.duration_direction#}}
+
             - 通行时长区间：P25={{#1770528546254.duration_quantile_25#}}，P75={{#1770528546254.duration_quantile_75#}}
+
             - 通行时长低位/高位比率：{{#1770528546254.duration_ratio_low#}} / {{#1770528546254.duration_ratio_high#}}
 
+
             请用2-3句中文总结当日状态，并分别说明通航量和通行时长的稳定性。不要把阈值内的小幅波动描述成异常。
+
+            '
         - id: 4878c381-cd4c-4570-a587-18fa09641069
           role: user
-          text: 请生成 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的正常通航简报，综合状态为 {{#1770528546254.regime#}}。
+          text: 请生成 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的正常通航简报，综合状态为
+            {{#1770528546254.regime#}}。
         selected: false
         title: NORMALSUMMARY
         type: llm
         vision:
           enabled: false
-      height: 86
+      height: 87
       id: '1775445602881'
       position:
-        x: 1499.2959187077897
-        y: 22.620016767619404
+        x: 2454
+        y: 238
       positionAbsolute:
-        x: 1499.2959187077897
-        y: 22.620016767619404
+        x: 2454
+        y: 238
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
-      width: 241
+      width: 242
     - data:
         context:
           enabled: false
@@ -971,29 +976,47 @@ workflow:
         prompt_template:
         - id: ba240e67-63bf-48d1-a163-555f6c413495
           role: system
-          text: |
-            你是一名航运数据质量分析师。当前路由为 PARTIAL_DATA 或 DATA_ISSUE，不能把缺失或不可用的数据误报成“正常”，也不能把物理上的零流量直接等同于数据采集故障。
+          text: '你是一名航运数据质量分析师。当前路由为 PARTIAL_DATA 或 DATA_ISSUE，不能把缺失或不可用的数据误报成“正常”，也不能把物理上的零流量直接等同于数据采集故障。
+
 
             - 通道：{{#1770528546254.pipe_name#}}
+
             - 日期：{{#1770528546254.run_date#}}
+
             - 路由：{{#1770528546254.route#}}
+
             - 综合状态：{{#1770528546254.regime#}}
+
             - 检测结论：{{#1770528546254.result#}}
+
             - 通航量标识：{{#1770528546254.anomaly_flag#}}（{{#1770528546254.flag_name#}}）
+
             - 通航量方向：{{#1770528546254.direction#}}
+
             - 通航量低位/高位比率：{{#1770528546254.ratio_low#}} / {{#1770528546254.ratio_high#}}
+
             - 通行时长标识：{{#1770528546254.duration_anomaly_flag#}}
+
             - 通行时长状态：{{#1770528546254.duration_status#}}
+
             - 通行时长方向：{{#1770528546254.duration_direction#}}
+
             - 通行时长低位/高位比率：{{#1770528546254.duration_ratio_low#}} / {{#1770528546254.duration_ratio_high#}}
 
+
             如果 route=PARTIAL_DATA，明确指出哪一个指标仍可用、哪一个指标不可用，并只对可用指标下结论。
+
             如果 route=DATA_ISSUE，说明无法可靠判断的原因，并建议核查参数、AIS数据源和当日原始记录。
+
             anomaly_flag=2 表示无可用通航量数据；3 表示数据平坦；4 表示样本或流量不足。
+
             输出2-4句专业、谨慎的中文说明。
+
+            '
         - id: bb8f2dc5-81a8-4a3e-914c-71919649c876
           role: user
-          text: 请根据 route={{#1770528546254.route#}} 和 regime={{#1770528546254.regime#}}，说明 {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的数据可用性和可下结论范围。
+          text: 请根据 route={{#1770528546254.route#}} 和 regime={{#1770528546254.regime#}}，说明
+            {{#1770528546254.run_date#}} {{#1770528546254.pipe_name#}} 的数据可用性和可下结论范围。
         retry_config:
           max_retries: 3
           retry_enabled: true
@@ -1003,21 +1026,21 @@ workflow:
         type: llm
         vision:
           enabled: false
-      height: 115
+      height: 117
       id: '1775446075083'
       position:
-        x: 1500.7064927145743
-        y: 172.93798923722758
+        x: 2092
+        y: 245
       positionAbsolute:
-        x: 1500.7064927145743
-        y: 172.93798923722758
+        x: 2092
+        y: 245
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
-      width: 241
+      width: 242
     viewport:
-      x: 329.3546831354911
-      y: 328.64680553615847
-      zoom: 0.4055635777885221
+      x: 389.3162219255163
+      y: 395.22488325530435
+      zoom: 0.3945354310283908
   rag_pipeline_variables: []
