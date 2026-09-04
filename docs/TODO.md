@@ -210,3 +210,8 @@ and none are elevated yet.
   on 2026-08-16. The frontend production build also passes.
 
 Always scope pytest to `tests/`; bare pytest also collects the vendored `dify/` tree.
+
+
+## Validation item
+
+- [x] if the chatflow works as expectation. currently it fails on question - 2026年05月01日 英吉利海峡是否拥堵？2026-08-01 英吉利海峡是否拥堵？

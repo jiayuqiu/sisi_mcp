@@ -216,6 +216,51 @@ class TestTriggerChatflowWorklogUpsert(unittest.TestCase):
         assert row == ("answer after retry",)
 
     @patch.object(trigger, "call_dify_chatflow")
+    def test_non_retryable_dify_error_logs_diagnostics(self, mock_call):
+        response = requests.Response()
+        response.status_code = 400
+        response.reason = "Bad Request"
+        response.url = "http://example/v1/chat-messages"
+        response.headers["content-type"] = "application/json"
+        response.headers["x-request-id"] = "dify-request-123"
+        response._content = (
+            b'{"message":"Run failed: could not find json block in the output.",'
+            + (b'"detail":"' + b"x" * 600 + b'FULL-BODY-MARKER"}')
+        )
+        mock_call.side_effect = requests.exceptions.HTTPError(
+            "Dify returned 400",
+            response=response,
+        )
+
+        with patch.object(trigger, "DB_PATH", self.db_path), patch.dict(
+            os.environ,
+            {"DIFY_API_KEY": "dummy", "DIFY_CHATFLOW_URL": "http://example/v1"},
+            clear=False,
+        ), self.assertLogs(trigger.logger, level="ERROR") as captured:
+            trigger.run(
+                start_date=date(2026, 4, 15),
+                end_date=date(2026, 4, 15),
+                pipe_filter="霍尔木兹海峡",
+                dry_run=False,
+                limit=None,
+                sleep=0,
+                user="test-user",
+                timeout=5.0,
+                retries=2,
+                retry_backoff=0,
+                location_type_filter="pipe",
+            )
+
+        log_output = "\n".join(captured.output)
+        assert "after 1 attempt(s)" in log_output
+        assert "retryable=False" in log_output
+        assert "status=400" in log_output
+        assert "x-request-id=dify-request-123" in log_output
+        assert "FULL-BODY-MARKER" in log_output
+        assert "请分析2026年4月15日" in log_output
+        assert mock_call.call_count == 1
+
+    @patch.object(trigger, "call_dify_chatflow")
     def test_all_location_types_are_logged_separately(self, mock_call):
         mock_call.side_effect = [
             {"answer": "pipe answer", "message_id": "pipe-message"},

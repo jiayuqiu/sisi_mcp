@@ -27,6 +27,7 @@ dependencies = [
     "pandas-stubs~=2.3.3",
     "griffe<1",
     "prefect>=3.0",
+    "openai",
 ]
 
 [tool.hatch.build.targets.wheel]

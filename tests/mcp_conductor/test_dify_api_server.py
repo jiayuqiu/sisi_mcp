@@ -8,6 +8,7 @@ from mcp_conductor.servers.dify_api_server import (
     analyze_anomaly_reason,
     detect_anomaly,
     parse_question,
+    parse_question_json,
 )
 
 
@@ -43,6 +44,38 @@ class TestParseQuestion(unittest.TestCase):
         run_date, pipe = parse_question("马六甲海峡是否拥堵")
         assert run_date is None
         assert pipe == "马六甲海峡"
+
+
+class TestParseQuestionJson(unittest.TestCase):
+    """Unit tests for the parse_question_json helper."""
+
+    def test_structured_question_dict(self):
+        run_date, location, location_type = parse_question_json(
+            {
+                "year": "2026",
+                "month": "5",
+                "day": "1",
+                "location": "英吉利海峡",
+                "location_type": "pipe",
+            }
+        )
+
+        assert run_date == "2026-05-01"
+        assert location == "英吉利海峡"
+        assert location_type == "pipe"
+
+    def test_structured_question_json_string_infers_port_type(self):
+        run_date, location, location_type = parse_question_json(
+            '{"year":"2026","month":"5","day":"4",'
+            '"location":"上海港"}'
+        )
+
+        assert run_date == "2026-05-04"
+        assert location == "上海港"
+        assert location_type == "port"
+
+    def test_empty_question(self):
+        assert parse_question_json("") == (None, None, None)
 
 
 class TestDetectAnomaly(unittest.TestCase):
