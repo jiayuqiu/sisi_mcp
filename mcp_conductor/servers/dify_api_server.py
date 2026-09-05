@@ -568,6 +568,12 @@ async def save_worklog(request: SaverRequest):
         )
 
         run_date, pipe_name, location_type = parse_question_json(request.question)
+        logger.info(
+            "save_worklog parsed question: %s, %s, %s",
+            run_date,
+            location_type,
+            pipe_name,
+        )
         if not run_date or not pipe_name or location_type not in {"pipe", "port"}:
             return {
                 "success": False,

@@ -62,6 +62,53 @@ logger = logging.getLogger(__name__)
 # script works regardless of the caller's current working directory.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH = PROJECT_ROOT / "data" / "sisi.sqlite"
+MAX_DIFY_ERROR_BODY_CHARS = 10_000
+_DIFY_TRACE_HEADERS = (
+    "x-request-id",
+    "x-correlation-id",
+    "x-trace-id",
+    "traceparent",
+)
+
+
+def format_dify_error_details(error: requests.exceptions.RequestException) -> str:
+    """Build useful HTTP diagnostics without exposing authorization headers."""
+    details = [f"exception_type={type(error).__name__}"]
+    response = getattr(error, "response", None)
+    if response is None:
+        details.append(f"message={error}")
+        return "\n    ".join(details)
+
+    request = getattr(response, "request", None)
+    request_method = getattr(request, "method", None)
+    request_url = getattr(request, "url", None) or getattr(response, "url", None)
+    if request_method:
+        details.append(f"method={request_method}")
+    if request_url:
+        details.append(f"url={request_url}")
+    details.extend(
+        (
+            f"status={response.status_code}",
+            f"reason={response.reason or 'unknown'}",
+            f"content_type={response.headers.get('content-type', 'unknown')}",
+        )
+    )
+
+    trace_headers = [
+        f"{name}={response.headers[name]}"
+        for name in _DIFY_TRACE_HEADERS
+        if response.headers.get(name)
+    ]
+    details.append(
+        "trace_headers=" + (", ".join(trace_headers) if trace_headers else "none")
+    )
+
+    body = response.text or ""
+    if len(body) > MAX_DIFY_ERROR_BODY_CHARS:
+        omitted = len(body) - MAX_DIFY_ERROR_BODY_CHARS
+        body = f"{body[:MAX_DIFY_ERROR_BODY_CHARS]}... <{omitted} chars omitted>"
+    details.append(f"response_body={body or '<empty>'}")
+    return "\n    ".join(details)
 
 
 def fetch_detection_targets(
@@ -159,7 +206,8 @@ def call_dify_chatflow(
     }
     resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
     if not resp.ok:
-        # Surface the Dify error body to the caller for easier debugging
+        # Keep the exception concise. The caller logs the response body and
+        # safe trace headers separately via format_dify_error_details().
         body_preview = (resp.text or "")[:500]
         raise requests.exceptions.HTTPError(
             f"Dify returned {resp.status_code}: {body_preview}",
@@ -282,11 +330,15 @@ def run(
                     )
                     break
                 except requests.exceptions.RequestException as error:
-                    if attempt >= retries or not is_retryable_dify_error(error):
+                    retryable = is_retryable_dify_error(error)
+                    if attempt >= retries or not retryable:
                         raise
                     delay = retry_backoff * (2**attempt)
                     logger.warning(
-                        "[%d/%d] RETRY %d/%d %s %s after %.1fs: %s",
+                        "[%d/%d] RETRY %d/%d %s %s after %.1fs\n"
+                        "    query=%s\n"
+                        "    retryable=%s\n"
+                        "    %s",
                         i,
                         total,
                         attempt + 1,
@@ -294,7 +346,9 @@ def run(
                         pipe,
                         d.isoformat(),
                         delay,
-                        error,
+                        query,
+                        retryable,
+                        format_dify_error_details(error),
                     )
                     if delay > 0:
                         time.sleep(delay)
@@ -366,10 +420,35 @@ def run(
             succeeded += 1
         except requests.exceptions.RequestException as e:
             failed += 1
-            logger.error("[%d/%d] FAILED %s %s: %s", i, total, pipe, d.isoformat(), e)
+            logger.error(
+                "[%d/%d] FAILED %s %s after %d attempt(s)\n"
+                "    query=%s\n"
+                "    retryable=%s\n"
+                "    %s",
+                i,
+                total,
+                pipe,
+                d.isoformat(),
+                attempt + 1,
+                query,
+                is_retryable_dify_error(e),
+                format_dify_error_details(e),
+            )
         except Exception as e:
             failed += 1
-            logger.error("[%d/%d] UNEXPECTED ERROR %s %s: %s", i, total, pipe, d.isoformat(), e)
+            logger.exception(
+                "[%d/%d] UNEXPECTED ERROR %s %s\n"
+                "    query=%s\n"
+                "    exception_type=%s\n"
+                "    message=%s",
+                i,
+                total,
+                pipe,
+                d.isoformat(),
+                query,
+                type(e).__name__,
+                e,
+            )
 
         if sleep > 0 and i < total:
             time.sleep(sleep)

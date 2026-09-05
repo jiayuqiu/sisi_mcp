@@ -141,7 +141,8 @@ cython_debug/
 # project custom settings
 .vscode/
 secrets/
-data/
+data/*
+!data/sisi_empty.sqlite
 tmp/
 private/
 .claude/
@@ -151,3 +152,5 @@ private/
 frontend_nextjs/node_modules/
 frontend_nextjs/.next/
 frontend_nextjs/.env.local
+!frontend_nextjs/src/lib/
+!frontend_nextjs/src/lib/utils.ts
