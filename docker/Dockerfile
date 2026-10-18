@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
+    UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/
+
 RUN pip install uv
 
 ARG APP_UID=1000
@@ -12,7 +15,8 @@ RUN mkdir -p /home/sisillm && chown sisillm:sisillm /home/sisillm
 COPY pyproject.toml uv.lock ./
 COPY mcp_conductor/__init__.py mcp_conductor/__init__.py
 
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev \
+    --default-index https://mirrors.aliyun.com/pypi/simple/
 
 COPY . .
 

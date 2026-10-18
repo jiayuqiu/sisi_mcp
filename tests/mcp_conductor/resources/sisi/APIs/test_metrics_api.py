@@ -254,14 +254,13 @@ class TestBCIMetricsAPI(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("message", result)
 
-    def test_get_bci_metrics_real_request(self):
+    def test_get_bci_metrics_real_request_port(self):
         """Test a real API call to the BCI metrics service."""
         import json
         
         # Use dates and indicators from channel.py example
         start_date = "2026-04-16"
         end_date = "2026-04-16"
-        # zbxxs_val = "101-0003,101-0004"
         zbxxs_val = "101-0001,101-0002"
         
         print(f"\nSending real API request to {self.base_url}...")
@@ -286,6 +285,38 @@ class TestBCIMetricsAPI(unittest.TestCase):
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
             print(f"Real API request failed (might be IP whitelist or expired key): {result}")
+
+    def test_get_bci_metrics_real_request_strait(self):
+            """Test a real API call to the BCI metrics service."""
+            import json
+            
+            # Use dates and indicators from channel.py example
+            start_date = "2025-06-01"
+            end_date = "2025-06-02"
+            zbxxs_val = "101-0003,101-0004"
+            
+            print(f"\nSending real API request to {self.base_url}...")
+            result = get_bci_metrics(
+                app_id=self.app_id,
+                start_day=start_date,
+                end_day=end_date,
+                zbxxs=zbxxs_val
+            )
+            
+            self.assertTrue(isinstance(result, dict))
+            if result.get("success"):
+                self.assertIn("result", result)
+                data = result["result"]
+                
+                # Handle cases where "data" is a dictionary containing a list
+                if isinstance(data, dict):
+                    data = data.get("list", data.get("rows", []))
+                    
+                self.assertIsInstance(data, list)
+                print("\n--- 响应结果 (Response) ---")
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            else:
+                print(f"Real API request failed (might be IP whitelist or expired key): {result}")
 
     @patch('mcp_conductor.resources.sisi.APIs.metrics_api.requests.get')
     def test_signature_included_in_request(self, mock_get):

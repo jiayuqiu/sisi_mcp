@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ComposedChart,
   Area,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -40,6 +39,8 @@ interface ShipCntResponse {
   selected_name?: string | null;
 }
 
+type ChartMetric = "count" | "duration";
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TIME_WINDOWS = [
@@ -67,21 +68,12 @@ const ANOMALY_LABELS: Record<number, string> = {
   4: "黄灯",
 };
 
-const DIRECTION_COLORS: Record<string, string> = {
-  NORMAL: "#10b981",
-  LOW: "#8b5cf6",
-  HIGH: "#f97316",
-  MIXED: "#ec4899",
-  UNKNOWN: "#f59e0b",
-};
-
 function formatRatio(value: number | null): string {
   return value == null ? "—" : `${(value * 100).toFixed(0)}%`;
 }
 
-function anomalyColor(flag: number | null, direction: string | null): string | null {
+function anomalyColor(flag: number | null): string | null {
   if (flag == null) return null;
-  if (flag === 1 && direction) return DIRECTION_COLORS[direction] ?? ANOMALY_COLORS[flag];
   return ANOMALY_COLORS[flag] ?? null;
 }
 
@@ -103,28 +95,36 @@ function CustomTooltip({
   active,
   payload,
   label,
+  metric,
+  countLabel,
 }: {
   active?: boolean;
   payload?: { value: number | string; payload: DataPoint }[];
   label?: string;
+  metric: ChartMetric;
+  countLabel: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0].payload;
-  const flagColor = anomalyColor(point.anomaly_flag, point.direction);
+  const anomalyFlag = metric === "count" ? point.anomaly_flag : point.duration_anomaly_flag;
+  const flagColor = anomalyColor(anomalyFlag);
   const flagLabel =
-    point.anomaly_flag != null ? ANOMALY_LABELS[point.anomaly_flag] : null;
+    anomalyFlag != null ? ANOMALY_LABELS[anomalyFlag] : null;
 
   return (
     <div className="bg-navy-800 border border-navy-600 rounded-xl px-3.5 py-2.5 shadow-xl text-xs space-y-1">
       <p className="text-slate-400 font-mono">{label}</p>
-      <p className="text-white font-semibold">
-        通航船数量:{" "}
-        <span className="text-teal-400 text-sm">{point.ship_cnt}</span>
-      </p>
-      <p className="text-white font-semibold">
-        平均时长:{" "}
-        <span className="text-sky-400 text-sm">{point.duration ?? "—"}</span>
-      </p>
+      {metric === "count" ? (
+        <p className="text-white font-semibold">
+          {countLabel}:{" "}
+          <span className="text-teal-400 text-sm">{point.ship_cnt}</span>
+        </p>
+      ) : (
+        <p className="text-white font-semibold">
+          平均时长:{" "}
+          <span className="text-sky-400 text-sm">{point.duration ?? "—"}</span>
+        </p>
+      )}
       {flagColor && flagLabel && (
         <p className="flex items-center gap-1.5">
           <span
@@ -132,26 +132,24 @@ function CustomTooltip({
             style={{ backgroundColor: flagColor }}
           />
           <span style={{ color: flagColor }}>{flagLabel}</span>
-          {point.direction && <span className="text-slate-400">· {point.direction}</span>}
         </p>
       )}
-      {point.duration_direction && (
+      {metric === "duration" && point.duration_status && (
         <p className="text-slate-300">
-          时长方向: <span style={{ color: DIRECTION_COLORS[point.duration_direction] }}>{point.duration_direction}</span>
-          {point.duration_status && <span className="text-slate-500"> · {point.duration_status}</span>}
+          数据状态: <span className="text-slate-500">{point.duration_status}</span>
         </p>
       )}
-      {(point.ratio_low != null || point.ratio_high != null) && (
+      {metric === "count" && (point.ratio_low != null || point.ratio_high != null) && (
         <p className="text-slate-500">
           数量 L/H: {formatRatio(point.ratio_low)} / {formatRatio(point.ratio_high)}
         </p>
       )}
-      {(point.duration_ratio_low != null || point.duration_ratio_high != null) && (
+      {metric === "duration" &&
+        (point.duration_ratio_low != null || point.duration_ratio_high != null) && (
         <p className="text-slate-500">
           时长 L/H: {formatRatio(point.duration_ratio_low)} / {formatRatio(point.duration_ratio_high)}
         </p>
       )}
-      {point.regime && <p className="text-cyan-300 font-medium">状态: {point.regime}</p>}
     </div>
   );
 }
@@ -206,6 +204,7 @@ interface ShipCntChartProps {
   preferredName?: string;
   title?: string;
   subtitle?: string;
+  showDuration?: boolean;
 }
 
 export default function ShipCntChart({
@@ -214,7 +213,9 @@ export default function ShipCntChart({
   preferredName = "曼德海峡",
   title = "通航船数量",
   subtitle = "Ship count in channel",
+  showDuration = false,
 }: ShipCntChartProps = {}) {
+  const countLabel = dimension === "port" ? "停靠船数量" : "通航船数量";
   const [pipes, setPipes] = useState<string[]>([]);
   const [selectedPipe, setSelectedPipe] = useState<string>("");
 
@@ -228,6 +229,8 @@ export default function ShipCntChart({
 
   // Which quick-select is active (null = custom range)
   const [activeWindow, setActiveWindow] = useState<number | null>(90); // default = 3M
+  const [selectedMetric, setMetric] = useState<ChartMetric>("count");
+  const metric = showDuration ? selectedMetric : "count";
 
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -422,12 +425,45 @@ export default function ShipCntChart({
             <Ship className="w-4 h-4 text-teal-400" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-white">{title}</h2>
-            <p className="text-xs text-slate-500">{subtitle}</p>
+            <h2 className="text-sm font-semibold text-white">
+              {metric === "count" ? title : "平均时长"}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {metric === "count" ? subtitle : "Average duration"}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Metric selector */}
+          {showDuration && (
+          <div
+            className="flex items-center gap-1 bg-navy-900 rounded-lg p-0.5 border border-navy-700"
+            role="group"
+            aria-label="选择图表"
+          >
+            {([
+              { value: "count", label: "船舶数量" },
+              { value: "duration", label: "平均时长" },
+            ] as { value: ChartMetric; label: string }[]).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setMetric(option.value)}
+                aria-pressed={metric === option.value}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-xs font-medium transition-all",
+                  metric === option.value
+                    ? "bg-teal-500/20 text-teal-400 border border-teal-500/30"
+                    : "text-slate-500 hover:text-slate-300 border border-transparent",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          )}
+
           {/* Pipe selector */}
           <select
             value={selectedPipe}
@@ -540,6 +576,16 @@ export default function ShipCntChart({
                   <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
                 </linearGradient>
+                <linearGradient
+                  id="durationGradient"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
+                </linearGradient>
               </defs>
 
               <CartesianGrid
@@ -565,12 +611,11 @@ export default function ShipCntChart({
               />
 
               <YAxis
-                yAxisId="count"
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 axisLine={false}
                 tickLine={false}
                 label={{
-                  value: "通航船数量",
+                  value: metric === "count" ? countLabel : "平均时长",
                   angle: -90,
                   position: "insideLeft",
                   offset: 20,
@@ -579,42 +624,32 @@ export default function ShipCntChart({
                 }}
               />
 
-              <YAxis
-                yAxisId="duration"
-                orientation="right"
-                tick={{ fontSize: 10, fill: "#64748b" }}
-                axisLine={false}
-                tickLine={false}
-                label={{
-                  value: "平均时长",
-                  angle: 90,
-                  position: "insideRight",
-                  offset: 12,
-                  fontSize: 10,
-                  fill: "#475569",
-                }}
-              />
-
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip metric={metric} countLabel={countLabel} />} />
 
               <Area
-                yAxisId="count"
                 type="monotone"
-                dataKey="ship_cnt"
-                stroke="#14b8a6"
+                dataKey={metric === "count" ? "ship_cnt" : "duration"}
+                stroke={metric === "count" ? "#14b8a6" : "#38bdf8"}
                 strokeWidth={1.5}
-                fill="url(#shipCntGradient)"
+                fill={metric === "count" ? "url(#shipCntGradient)" : "url(#durationGradient)"}
+                connectNulls={false}
                 dot={(props) => {
                   const { cx, cy, payload } = props as {
                     cx: number;
                     cy: number;
                     payload: DataPoint;
                   };
-                  const color = anomalyColor(payload.anomaly_flag, payload.direction);
+                  const anomalyFlag =
+                    metric === "count"
+                      ? payload.anomaly_flag
+                      : payload.duration_anomaly_flag;
+                  const color = anomalyColor(anomalyFlag);
                   if (color) {
-                    const isObvious = payload.anomaly_flag === 1 || (payload.anomaly_flag != null && payload.anomaly_flag >= 2);
+                    const isObvious =
+                      anomalyFlag === 1 ||
+                      (anomalyFlag != null && anomalyFlag >= 2);
                     return (
-                      <g key={`dot-${payload.date}`}>
+                      <g key={`${metric}-dot-${payload.date}`}>
                         {/* vertical drop line — only for red/yellow */}
                         {isObvious && (
                           <line
@@ -651,45 +686,14 @@ export default function ShipCntChart({
                       </g>
                     );
                   }
-                  return <g key={`dot-${payload.date}`} />;
+                  return <g key={`${metric}-dot-${payload.date}`} />;
                 }}
                 activeDot={{
                   r: 4,
-                  fill: "#14b8a6",
+                  fill: metric === "count" ? "#14b8a6" : "#38bdf8",
                   stroke: "#0f172a",
                   strokeWidth: 2,
                 }}
-                isAnimationActive={true}
-                animationDuration={600}
-              />
-              <Line
-                yAxisId="duration"
-                type="monotone"
-                dataKey="duration"
-                stroke="#38bdf8"
-                strokeWidth={1.5}
-                connectNulls={false}
-                dot={(props) => {
-                  const { cx, cy, payload } = props as {
-                    cx: number;
-                    cy: number;
-                    payload: DataPoint;
-                  };
-                  const color = anomalyColor(
-                    payload.duration_anomaly_flag,
-                    payload.duration_direction,
-                  );
-                  if (!color || payload.duration_anomaly_flag === 0) {
-                    return <g key={`duration-dot-${payload.date}`} />;
-                  }
-                  return (
-                    <g key={`duration-dot-${payload.date}`}>
-                      <circle cx={cx} cy={cy} r={5} fill={`${color}20`} stroke={`${color}80`} />
-                      <circle cx={cx} cy={cy} r={2.5} fill={color} />
-                    </g>
-                  );
-                }}
-                activeDot={{ r: 4, fill: "#38bdf8", stroke: "#0f172a", strokeWidth: 2 }}
                 isAnimationActive={true}
                 animationDuration={600}
               />
@@ -701,22 +705,14 @@ export default function ShipCntChart({
       {/* ── Legend ── */}
       <div className="flex items-center gap-4 text-xs text-slate-500 pt-0.5">
         <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-0.5 bg-teal-500 rounded" />
-          <span>通航船数量</span>
+          <span
+            className={cn(
+              "inline-block w-3 h-0.5 rounded",
+              metric === "count" ? "bg-teal-500" : "bg-sky-400",
+            )}
+          />
+          <span>{metric === "count" ? countLabel : "平均时长"}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-0.5 bg-sky-400 rounded" />
-          <span>平均时长</span>
-        </div>
-        {(["LOW", "HIGH", "MIXED"] as const).map((direction) => (
-          <div key={direction} className="flex items-center gap-1.5">
-            <span
-              className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: DIRECTION_COLORS[direction] }}
-            />
-            <span>{direction}</span>
-          </div>
-        ))}
         {([
           { color: "#ef4444", label: "红灯" },
           { color: "#f59e0b", label: "黄灯" },
