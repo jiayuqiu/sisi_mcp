@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   ComposedChart,
   Area,
@@ -9,6 +10,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  usePlotArea,
 } from "recharts";
 import { Ship, RefreshCw, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -75,6 +77,38 @@ function formatRatio(value: number | null): string {
 function anomalyColor(flag: number | null): string | null {
   if (flag == null) return null;
   return ANOMALY_COLORS[flag] ?? null;
+}
+
+interface AnomalyDotProps {
+  cx?: number;
+  cy?: number;
+  payload?: DataPoint;
+  metric: ChartMetric;
+}
+
+function AnomalyDot({ cx, cy, payload, metric }: AnomalyDotProps) {
+  const plot = usePlotArea();
+  const value = metric === "count" ? payload?.ship_cnt : payload?.duration;
+  if (!plot || !payload || value == null || !Number.isFinite(value) ||
+      cx == null || cy == null || !Number.isFinite(cx) || !Number.isFinite(cy)) return <g />;
+  const flag = metric === "count" ? payload.anomaly_flag : payload.duration_anomaly_flag;
+  const color = anomalyColor(flag);
+  if (!color) return <g />;
+  const isObvious = flag != null && flag > 0;
+  const bottom = plot.y + plot.height;
+  return (
+    <g>
+      {isObvious && cy + 5 < bottom && (
+        <line x1={cx} y1={cy + 5} x2={cx} y2={bottom}
+          stroke={color} strokeWidth={1} strokeDasharray="3 2" opacity={0.5} />
+      )}
+      {isObvious && (
+        <circle cx={cx} cy={cy} r={6} fill={`${color}20`} stroke={`${color}60`} strokeWidth={1} />
+      )}
+      <circle cx={cx} cy={cy} r={isObvious ? 3 : 2} fill={color}
+        stroke="#0f172a" strokeWidth={isObvious ? 1.5 : 1} />
+    </g>
+  );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -205,6 +239,9 @@ interface ShipCntChartProps {
   title?: string;
   subtitle?: string;
   showDuration?: boolean;
+  dashboard?: boolean;
+  controlsContainer?: HTMLElement | null;
+  onDateSelect?: (date: string) => void;
 }
 
 export default function ShipCntChart({
@@ -214,6 +251,9 @@ export default function ShipCntChart({
   title = "通航船数量",
   subtitle = "Ship count in channel",
   showDuration = false,
+  dashboard = false,
+  controlsContainer,
+  onDateSelect,
 }: ShipCntChartProps = {}) {
   const countLabel = dimension === "port" ? "停靠船数量" : "通航船数量";
   const [pipes, setPipes] = useState<string[]>([]);
@@ -231,6 +271,10 @@ export default function ShipCntChart({
   const [activeWindow, setActiveWindow] = useState<number | null>(90); // default = 3M
   const [selectedMetric, setMetric] = useState<ChartMetric>("count");
   const metric = showDuration ? selectedMetric : "count";
+  const [visiblePlots, setVisiblePlots] = useState<Record<ChartMetric, boolean>>({ count: true, duration: false });
+  const displayedMetrics = dashboard
+    ? (["count", "duration"] as ChartMetric[]).filter((key) => visiblePlots[key])
+    : [metric];
 
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -414,10 +458,28 @@ export default function ShipCntChart({
 
   const tickInterval = Math.max(0, Math.floor(data.length / 8) - 1);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const latest = data[data.length - 1];
+  const previous = data[data.length - 2];
+  const isPreviousDay = latest && previous &&
+    new Date(latest.date).getTime() - new Date(previous.date).getTime() === 86400000;
+  const dailyChange = isPreviousDay && latest.ship_cnt != null && previous.ship_cnt != null
+    ? latest.ship_cnt - previous.ship_cnt : null;
+  const dailyPercent = dailyChange != null && previous.ship_cnt > 0
+    ? (dailyChange / previous.ship_cnt) * 100 : null;
+  const durationData = data.map((point) => ({
+    ...point,
+    duration: point.duration != null && point.duration > 0 ? point.duration : null,
+  }));
+  const durationSamples = durationData.filter((point) => point.duration != null).length;
+  const latestFlag = latest?.anomaly_flag;
+  const statusLabel = latestFlag != null
+    ? ANOMALY_LABELS[latestFlag] ?? "未评估" : "未评估";
+  const directionLabel: Record<string, string> = {
+    NORMAL: "正常", LOW: "偏低", HIGH: "偏高", MIXED: "双向波动", UNKNOWN: "未知",
+  };
 
-  return (
-    <div className="rounded-xl border border-navy-700 bg-navy-800/80 px-5 py-4 space-y-3">
+  const controls = (
+    <div className={cn("space-y-3", controlsContainer && "rounded-xl border border-navy-700 bg-navy-800/80 px-5 py-4")}>
       {/* ── Row 1: Title + Pipe selector + Refresh ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2.5">
@@ -426,17 +488,17 @@ export default function ShipCntChart({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">
-              {metric === "count" ? title : "平均时长"}
+              {dashboard ? "通航概览" : metric === "count" ? title : "平均时长"}
             </h2>
             <p className="text-xs text-slate-500">
-              {metric === "count" ? subtitle : "Average duration"}
+              {dashboard ? "Traffic overview · 数量与通行时长" : metric === "count" ? subtitle : "Average duration"}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Metric selector */}
-          {showDuration && (
+          {showDuration && !dashboard && (
           <div
             className="flex items-center gap-1 bg-navy-900 rounded-lg p-0.5 border border-navy-700"
             role="group"
@@ -545,8 +607,68 @@ export default function ShipCntChart({
         )}
       </div>
 
+      {dashboard && (
+        <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-300">
+          <legend className="sr-only">显示图表</legend>
+          <span className="text-xs text-slate-500" aria-hidden="true">显示图表</span>
+          {([
+            { key: "count", label: "通航船数量" },
+            { key: "duration", label: "平均通行时长" },
+          ] as { key: ChartMetric; label: string }[]).map(({ key, label }) => (
+            <label key={key} className="inline-flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={visiblePlots[key]}
+                onChange={(event) => setVisiblePlots((current) => ({ ...current, [key]: event.target.checked }))}
+                className="h-4 w-4 accent-teal-500"
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      )}
+    </div>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div className={cn("rounded-xl border border-navy-700 bg-navy-800/80 px-5 py-4 space-y-3", dashboard && "space-y-5")}>
+      {controlsContainer ? createPortal(controls, controlsContainer) : controls}
+
+      {dashboard && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Traffic summary">
+          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
+            <p className="text-xs text-slate-500">最新通航量</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{loading ? "—" : latest?.ship_cnt ?? "—"}<span className="ml-1 text-xs font-normal text-slate-500">艘</span></p>
+            <p className="mt-1 text-xs text-slate-500">{latest?.date ?? "暂无数据"}</p>
+          </div>
+          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
+            <p className="text-xs text-slate-500">较前一日</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{loading || dailyChange == null ? "—" : `${dailyChange > 0 ? "+" : ""}${dailyChange}`}<span className="ml-1 text-xs font-normal text-slate-500">艘</span></p>
+            <p className="mt-1 text-xs text-slate-500">{dailyPercent != null ? `${dailyPercent > 0 ? "+" : ""}${dailyPercent.toFixed(1)}%` : "无可比百分比"}</p>
+          </div>
+          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
+            <p className="text-xs text-slate-500">通航量异常状态</p>
+            <p className="mt-2 text-2xl font-semibold" style={{ color: anomalyColor(latestFlag ?? null) ?? "#94a3b8" }}>{loading ? "—" : statusLabel}</p>
+            <p className="mt-1 text-xs text-slate-500">{latest?.direction ? directionLabel[latest.direction] ?? "未知" : "尚无检测结果"}</p>
+          </div>
+        </div>
+      )}
+
+      {displayedMetrics.length > 0 && (
+        <section className={dashboard ? "border-t border-navy-700 pt-4 space-y-3" : undefined} aria-label="Traffic chart">
+          {dashboard && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-medium text-slate-200">{dashboard ? "通航数量与平均通行时长" : metric === "count" ? "通航船数量" : "平均通行时长"}</h3>
+              <span className="text-xs text-slate-500">{"点击日期查看当日分析日志"}</span>
+            </div>
+          )}
       {/* ── Chart ── */}
-      <div className="relative h-52">
+      <div className={cn("relative", dashboard ? "h-[350px]" : "h-52")}>
+        {displayedMetrics.length === 1 && displayedMetrics[0] === "duration" && durationSamples === 0 && !loading && !error && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">该时段暂无有效通行时长数据</div>
+        )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-navy-800/60 rounded-lg z-10">
             <RefreshCw className="w-5 h-5 animate-spin text-teal-500" />
@@ -562,7 +684,11 @@ export default function ShipCntChart({
         {!error && (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
-              data={data}
+              data={durationData}
+              syncId={dashboard ? "workflow-traffic" : undefined}
+              onClick={(state) => {
+                if (dashboard && typeof state.activeLabel === "string") onDateSelect?.(state.activeLabel);
+              }}
               margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
             >
               <defs>
@@ -610,84 +736,49 @@ export default function ShipCntChart({
                 }}
               />
 
+              {(dashboard ? ["count", "duration"] as ChartMetric[] : [metric]).map((axisMetric) => (
               <YAxis
+                key={axisMetric}
+                yAxisId={axisMetric}
+                dataKey={axisMetric === "count" ? "ship_cnt" : "duration"}
+                orientation={dashboard && axisMetric === "duration" ? "right" : "left"}
+                allowDecimals={axisMetric !== "count"}
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 axisLine={false}
                 tickLine={false}
                 label={{
-                  value: metric === "count" ? countLabel : "平均时长",
+                  value: axisMetric === "count" ? countLabel : "平均通行时长",
                   angle: -90,
-                  position: "insideLeft",
+                  position: dashboard && axisMetric === "duration" ? "insideRight" : "insideLeft",
                   offset: 20,
                   fontSize: 10,
                   fill: "#475569",
                 }}
               />
 
-              <Tooltip content={<CustomTooltip metric={metric} countLabel={countLabel} />} />
+              ))}
 
+              <Tooltip content={({ active, payload, label }) => (
+                <div className="space-y-1">
+                  {displayedMetrics.map((visibleMetric) => {
+                    const entry = payload?.find((item) => item.dataKey === (visibleMetric === "count" ? "ship_cnt" : "duration"));
+                    if (!entry) return null;
+                    return <CustomTooltip key={visibleMetric} active={active} label={String(label ?? "")} metric={visibleMetric} countLabel={countLabel} payload={[{ value: Number(entry.value), payload: entry.payload as DataPoint }]} />;
+                  })}
+                </div>
+              )} />
+
+              {displayedMetrics.map((metric) => (
               <Area
+                key={metric}
+                yAxisId={metric}
                 type="monotone"
                 dataKey={metric === "count" ? "ship_cnt" : "duration"}
                 stroke={metric === "count" ? "#14b8a6" : "#38bdf8"}
                 strokeWidth={1.5}
                 fill={metric === "count" ? "url(#shipCntGradient)" : "url(#durationGradient)"}
                 connectNulls={false}
-                dot={(props) => {
-                  const { cx, cy, payload } = props as {
-                    cx: number;
-                    cy: number;
-                    payload: DataPoint;
-                  };
-                  const anomalyFlag =
-                    metric === "count"
-                      ? payload.anomaly_flag
-                      : payload.duration_anomaly_flag;
-                  const color = anomalyColor(anomalyFlag);
-                  if (color) {
-                    const isObvious =
-                      anomalyFlag === 1 ||
-                      (anomalyFlag != null && anomalyFlag >= 2);
-                    return (
-                      <g key={`${metric}-dot-${payload.date}`}>
-                        {/* vertical drop line — only for red/yellow */}
-                        {isObvious && (
-                          <line
-                            x1={cx}
-                            y1={0}
-                            x2={cx}
-                            y2={cy - 5}
-                            stroke={color}
-                            strokeWidth={1}
-                            strokeDasharray="3 2"
-                            opacity={0.5}
-                          />
-                        )}
-                        {/* outer glow ring — only for red/yellow */}
-                        {isObvious && (
-                          <circle
-                            cx={cx}
-                            cy={cy}
-                            r={6}
-                            fill={`${color}20`}
-                            stroke={`${color}60`}
-                            strokeWidth={1}
-                          />
-                        )}
-                        {/* solid centre dot */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={isObvious ? 3 : 2}
-                          fill={color}
-                          stroke="#0f172a"
-                          strokeWidth={isObvious ? 1.5 : 1}
-                        />
-                      </g>
-                    );
-                  }
-                  return <g key={`${metric}-dot-${payload.date}`} />;
-                }}
+                dot={(props) => <AnomalyDot {...props as unknown as AnomalyDotProps} metric={metric} />}
                 activeDot={{
                   r: 4,
                   fill: metric === "count" ? "#14b8a6" : "#38bdf8",
@@ -697,22 +788,27 @@ export default function ShipCntChart({
                 isAnimationActive={true}
                 animationDuration={600}
               />
+              ))}
             </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
 
+          {dashboard && visiblePlots.duration && (
+            <p className="text-xs text-slate-500">{durationSamples} / {data.length} 天有时长数据 · 缺失或零值不连线</p>
+          )}
+        </section>
+      )}
+
       {/* ── Legend ── */}
+      {displayedMetrics.length > 0 && (
       <div className="flex items-center gap-4 text-xs text-slate-500 pt-0.5">
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              "inline-block w-3 h-0.5 rounded",
-              metric === "count" ? "bg-teal-500" : "bg-sky-400",
-            )}
-          />
-          <span>{metric === "count" ? countLabel : "平均时长"}</span>
-        </div>
+        {displayedMetrics.map((visibleMetric) => (
+          <div key={visibleMetric} className="flex items-center gap-1.5">
+            <span className={cn("inline-block w-3 h-0.5 rounded", visibleMetric === "count" ? "bg-teal-500" : "bg-sky-400")} />
+            <span>{visibleMetric === "count" ? countLabel : "平均时长"}</span>
+          </div>
+        ))}
         {([
           { color: "#ef4444", label: "红灯" },
           { color: "#f59e0b", label: "黄灯" },
@@ -732,6 +828,7 @@ export default function ShipCntChart({
           </span>
         )}
       </div>
+      )}
     </div>
   );
 }

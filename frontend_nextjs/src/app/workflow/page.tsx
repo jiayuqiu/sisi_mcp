@@ -94,8 +94,8 @@ function LogCard({ log }: { log: LogEntry }) {
       )}
     >
       {/* Card header */}
-      <div className="flex items-center justify-between px-5 py-3.5">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
             className="text-xs font-mono text-slate-600 truncate max-w-[160px]"
             title={log.return_id}
@@ -127,7 +127,7 @@ function LogCard({ log }: { log: LogEntry }) {
               <FileText className="w-3.5 h-3.5" />
               Content
             </div>
-            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
               {expanded
                 ? log.content
                 : (contentPreview ?? (
@@ -144,7 +144,7 @@ function LogCard({ log }: { log: LogEntry }) {
               <Brain className="w-3.5 h-3.5" />
               Reasoning
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap bg-navy-900/50 rounded-lg px-3 py-2.5 border border-navy-700/50">
+            <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap break-words bg-navy-900/50 rounded-lg px-3 py-2.5 border border-navy-700/50">
               {expanded
                 ? log.reasoning_content
                 : (reasoningPreview ?? (
@@ -181,6 +181,7 @@ function LogCard({ log }: { log: LogEntry }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function WorkflowPage() {
+  const [controlsContainer, setControlsContainer] = useState<HTMLDivElement | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -191,6 +192,38 @@ export default function WorkflowPage() {
   const [filterPipe, setFilterPipe] = useState("");
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [datesLoading, setDatesLoading] = useState(true);
+  const [datesError, setDatesError] = useState(false);
+
+  useEffect(() => {
+    if (!filterPipe || !filterStart || !filterEnd) return;
+    const controller = new AbortController();
+    setDatesLoading(true);
+    setDatesError(false);
+    setAvailableDates([]);
+    const params = new URLSearchParams({
+      dates_only: "true", location_type: "pipe", pipe_name: filterPipe,
+      start_date: filterStart, end_date: filterEnd,
+    });
+    fetch(`/api/workflow-logs?${params}`, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: { available_dates: string[] } = await res.json();
+        if (!controller.signal.aborted) setAvailableDates(data.available_dates);
+      })
+      .catch(() => { if (!controller.signal.aborted) setDatesError(true); })
+      .finally(() => { if (!controller.signal.aborted) setDatesLoading(false); });
+    return () => controller.abort();
+  }, [filterPipe, filterStart, filterEnd]);
+
+  const selectLogDate = (date: string) => {
+    if (date && (datesLoading || !availableDates.includes(date))) return;
+    setSelectedDate(date || null);
+    setPage(0);
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -219,10 +252,13 @@ export default function WorkflowPage() {
   }, []);
 
   useEffect(() => {
-    fetchLogs(page, filterPipe, filterStart, filterEnd);
-  }, [page, filterPipe, filterStart, filterEnd, fetchLogs]);
+    fetchLogs(page, filterPipe, selectedDate ?? filterStart, selectedDate ?? filterEnd);
+  }, [page, filterPipe, filterStart, filterEnd, selectedDate, fetchLogs]);
 
   const handleFilterChange = useCallback((pipe: string, start: string, end: string) => {
+    setSelectedDate(null);
+    setAvailableDates([]);
+    setDatesLoading(true);
     setFilterPipe(pipe);
     setFilterStart(start);
     setFilterEnd(end);
@@ -230,98 +266,130 @@ export default function WorkflowPage() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden px-6 py-5 gap-5 max-w-4xl mx-auto w-full">
+    <div className="flex-1 min-h-0 grid grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] overflow-hidden px-6 py-5 gap-5 w-full">
+      <div ref={setControlsContainer} className="min-w-0 lg:col-span-2" role="region" aria-label="Workflow filters" />
       {/* Ship count chart — drives the inspector filter */}
-      <ShipCntChart onFilterChange={handleFilterChange} />
+      <section aria-label="Ship count plot" className="min-w-0 min-h-0 overflow-y-auto pr-1">
+        <ShipCntChart onFilterChange={handleFilterChange} controlsContainer={controlsContainer} dashboard onDateSelect={selectLogDate} />
+      </section>
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
-            <Activity className="w-4.5 h-4.5 text-teal-400" />
+      <section aria-label="Analysis logs" className="min-w-0 min-h-0 flex flex-col gap-5">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
+              <Activity className="w-4.5 h-4.5 text-teal-400" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-white">
+                分析日志
+              </h1>
+              <p className="text-xs text-slate-500">{total} agent call records</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-white">
-              分析日志
-            </h1>
-            <p className="text-xs text-slate-500">{total} agent call records</p>
-          </div>
+          <button
+            onClick={() => fetchLogs(page, filterPipe, selectedDate ?? filterStart, selectedDate ?? filterEnd)}
+            disabled={loading}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm transition-all",
+              "border border-navy-600 text-slate-400",
+              "hover:text-teal-400 hover:border-teal-500/30 hover:bg-teal-500/5",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+            )}
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+            Refresh
+          </button>
         </div>
-        <button
-          onClick={() => fetchLogs(page, filterPipe, filterStart, filterEnd)}
-          disabled={loading}
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm transition-all",
-            "border border-navy-600 text-slate-400",
-            "hover:text-teal-400 hover:border-teal-500/30 hover:bg-teal-500/5",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
+
+        <div className="flex-shrink-0 rounded-xl border border-navy-700 bg-navy-800/60 px-3 py-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="log-date" className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Calendar className="h-3.5 w-3.5" />
+              日志日期
+            </label>
+            <select
+              id="log-date"
+              value={selectedDate ?? ""}
+              disabled={datesLoading || datesError || availableDates.length === 0}
+              onChange={(event) => selectLogDate(event.target.value)}
+              className="min-w-0 rounded-lg border border-navy-600 bg-navy-900 px-2.5 py-1.5 text-sm text-slate-300 [color-scheme:dark] focus:outline-none focus:border-teal-500/50 disabled:opacity-50"
+            >
+              <option value="">{datesLoading ? "加载日期…" : datesError ? "日期加载失败" : availableDates.length === 0 ? "暂无日志日期" : "全部有日志的日期"}</option>
+              {availableDates.map((date) => <option key={date} value={date}>{date}</option>)}
+            </select>
+            {selectedDate && (
+              <button onClick={() => { setSelectedDate(null); setPage(0); }} className="text-xs text-teal-400 hover:text-teal-200">清除日期</button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            {selectedDate ? `${selectedDate} · 当日分析` : `${filterStart || "—"} — ${filterEnd || "—"} · 全部日期`}
+          </p>
+        </div>
+
+        <p className="text-xs text-slate-500">仅可选择有分析日志的日期</p>
+
+        {/* Error */}
+        {error && (
+          <div className="flex-shrink-0 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Cards list */}
+        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <RefreshCw className="w-6 h-6 animate-spin text-teal-500 mb-3" />
+              <span className="text-sm">Loading records...</span>
+            </div>
           )}
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-          Refresh
-        </button>
-      </div>
 
-      {/* Error */}
-      {error && (
-        <div className="flex-shrink-0 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-          {error}
+          {!loading && logs.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <FileText className="w-8 h-8 mb-3 text-slate-600" />
+              <span className="text-sm">No workflow logs found</span>
+            </div>
+          )}
+
+          {!loading && logs.map((log) => <LogCard key={log.return_id} log={log} />)}
         </div>
-      )}
 
-      {/* Cards list */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-            <RefreshCw className="w-6 h-6 animate-spin text-teal-500 mb-3" />
-            <span className="text-sm">Loading records...</span>
+        {/* Pagination */}
+        <div className="flex-shrink-0 flex items-center justify-between pt-1">
+          <span className="text-xs text-slate-500">
+            Page {page + 1} of {totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0 || loading}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
+                "border border-navy-600 text-slate-400",
+                "hover:text-slate-200 hover:border-navy-500",
+                "disabled:opacity-40 disabled:cursor-not-allowed",
+              )}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || loading}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
+                "border border-navy-600 text-slate-400",
+                "hover:text-slate-200 hover:border-navy-500",
+                "disabled:opacity-40 disabled:cursor-not-allowed",
+              )}
+            >
+              Next
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-        )}
-
-        {!loading && logs.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-            <FileText className="w-8 h-8 mb-3 text-slate-600" />
-            <span className="text-sm">No workflow logs found</span>
-          </div>
-        )}
-
-        {!loading && logs.map((log) => <LogCard key={log.return_id} log={log} />)}
-      </div>
-
-      {/* Pagination */}
-      <div className="flex-shrink-0 flex items-center justify-between pt-1">
-        <span className="text-xs text-slate-500">
-          Page {page + 1} of {totalPages}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0 || loading}
-            className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
-              "border border-navy-600 text-slate-400",
-              "hover:text-slate-200 hover:border-navy-500",
-              "disabled:opacity-40 disabled:cursor-not-allowed",
-            )}
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            Previous
-          </button>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1 || loading}
-            className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
-              "border border-navy-600 text-slate-400",
-              "hover:text-slate-200 hover:border-navy-500",
-              "disabled:opacity-40 disabled:cursor-not-allowed",
-            )}
-          >
-            Next
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
