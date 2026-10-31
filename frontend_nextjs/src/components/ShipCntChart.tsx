@@ -255,6 +255,7 @@ export default function ShipCntChart({
   controlsContainer,
   onDateSelect,
 }: ShipCntChartProps = {}) {
+  const durationLabel = dimension === "port" ? "平均在港时长" : "平均通行时长";
   const countLabel = dimension === "port" ? "停靠船数量" : "通航船数量";
   const [pipes, setPipes] = useState<string[]>([]);
   const [selectedPipe, setSelectedPipe] = useState<string>("");
@@ -488,10 +489,10 @@ export default function ShipCntChart({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">
-              {dashboard ? "通航概览" : metric === "count" ? title : "平均时长"}
+              {dashboard ? (dimension === "port" ? "港口概览" : "通航概览") : metric === "count" ? title : "平均时长"}
             </h2>
             <p className="text-xs text-slate-500">
-              {dashboard ? "Traffic overview · 数量与通行时长" : metric === "count" ? subtitle : "Average duration"}
+              {dashboard ? (dimension === "port" ? "Port overview · 数量与在港时长" : "Traffic overview · 数量与通行时长") : metric === "count" ? subtitle : "Average duration"}
             </p>
           </div>
         </div>
@@ -612,8 +613,8 @@ export default function ShipCntChart({
           <legend className="sr-only">显示图表</legend>
           <span className="text-xs text-slate-500" aria-hidden="true">显示图表</span>
           {([
-            { key: "count", label: "通航船数量" },
-            { key: "duration", label: "平均通行时长" },
+            { key: "count", label: countLabel },
+            { key: "duration", label: durationLabel },
           ] as { key: ChartMetric; label: string }[]).map(({ key, label }) => (
             <label key={key} className="inline-flex cursor-pointer items-center gap-2">
               <input
@@ -639,7 +640,7 @@ export default function ShipCntChart({
       {dashboard && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Traffic summary">
           <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
-            <p className="text-xs text-slate-500">最新通航量</p>
+            <p className="text-xs text-slate-500">{dimension === "port" ? "最新停靠量" : "最新通航量"}</p>
             <p className="mt-2 text-2xl font-semibold text-white">{loading ? "—" : latest?.ship_cnt ?? "—"}<span className="ml-1 text-xs font-normal text-slate-500">艘</span></p>
             <p className="mt-1 text-xs text-slate-500">{latest?.date ?? "暂无数据"}</p>
           </div>
@@ -649,7 +650,7 @@ export default function ShipCntChart({
             <p className="mt-1 text-xs text-slate-500">{dailyPercent != null ? `${dailyPercent > 0 ? "+" : ""}${dailyPercent.toFixed(1)}%` : "无可比百分比"}</p>
           </div>
           <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
-            <p className="text-xs text-slate-500">通航量异常状态</p>
+            <p className="text-xs text-slate-500">{dimension === "port" ? "停靠量异常状态" : "通航量异常状态"}</p>
             <p className="mt-2 text-2xl font-semibold" style={{ color: anomalyColor(latestFlag ?? null) ?? "#94a3b8" }}>{loading ? "—" : statusLabel}</p>
             <p className="mt-1 text-xs text-slate-500">{latest?.direction ? directionLabel[latest.direction] ?? "未知" : "尚无检测结果"}</p>
           </div>
@@ -660,14 +661,14 @@ export default function ShipCntChart({
         <section className={dashboard ? "border-t border-navy-700 pt-4 space-y-3" : undefined} aria-label="Traffic chart">
           {dashboard && (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-slate-200">{dashboard ? "通航数量与平均通行时长" : metric === "count" ? "通航船数量" : "平均通行时长"}</h3>
+              <h3 className="text-sm font-medium text-slate-200">{`${countLabel}与${durationLabel}`}</h3>
               <span className="text-xs text-slate-500">{"点击日期查看当日分析日志"}</span>
             </div>
           )}
       {/* ── Chart ── */}
       <div className={cn("relative", dashboard ? "h-[350px]" : "h-52")}>
         {displayedMetrics.length === 1 && displayedMetrics[0] === "duration" && durationSamples === 0 && !loading && !error && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">该时段暂无有效通行时长数据</div>
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">{`该时段暂无有效${durationLabel}数据`}</div>
         )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-navy-800/60 rounded-lg z-10">
@@ -747,7 +748,7 @@ export default function ShipCntChart({
                 axisLine={false}
                 tickLine={false}
                 label={{
-                  value: axisMetric === "count" ? countLabel : "平均通行时长",
+                  value: axisMetric === "count" ? countLabel : durationLabel,
                   angle: -90,
                   position: dashboard && axisMetric === "duration" ? "insideRight" : "insideLeft",
                   offset: 20,
