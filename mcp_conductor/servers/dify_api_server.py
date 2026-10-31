@@ -24,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import the actual tool functions
-from mcp_conductor.entry.main_traffic_detect import analyze_congestion
+from mcp_conductor.analyzer.congestion import analyze_congestion
 # from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 from mcp_conductor.resources.utils.db import save_worklog_entry
 

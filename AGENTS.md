@@ -1,5 +1,3 @@
-# CLAUDE.md
-
 ## Project Overview
 
 **sisimcp** — A maritime traffic anomaly detection system exposed via MCP (Model Context Protocol) server and a FastAPI-based Dify integration API.
@@ -24,6 +22,7 @@ mcp_conductor/              # Backend features (core business logic)
     mcp_server_http.py      # MCP HTTP server entrypoint
     dify_api_server.py      # FastAPI server for Dify integration
   entry/                    # High-level orchestration (main_traffic_detect)
+  analyzer/                 # LLM-based causal anomaly analysis (congestion)
   detector/                 # Detection engine & plotting
   mcp_tools/                # MCP tool definitions
   resources/                # External API clients (DeepSeek, Sisi, Dify)
