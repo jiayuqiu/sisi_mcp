@@ -1,9 +1,17 @@
 FROM node:20-alpine
 
+# Use the Tsinghua mirror for Alpine packages; the default CDN is very slow
+# from this network.
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.tuna.tsinghua.edu.cn#g' /etc/apk/repositories
+
 # Install build dependencies for native modules (better-sqlite3)
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
+
+# Use the Aliyun npm mirror. npm rewrites the registry.npmjs.org host in
+# package-lock.json at install time (replace-registry-host defaults to "npmjs").
+ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 
 # Copy package files first for better caching
 COPY frontend_nextjs/package.json frontend_nextjs/package-lock.json ./
