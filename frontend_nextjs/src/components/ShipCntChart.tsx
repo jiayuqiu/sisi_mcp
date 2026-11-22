@@ -55,11 +55,16 @@ const TIME_WINDOWS = [
 
 // anomaly_flag: 0=green, 1=red, 2/3/4=yellow
 const ANOMALY_COLORS: Record<number, string> = {
-  0: "#10b981",
-  1: "#ef4444",
-  2: "#f59e0b",
-  3: "#f59e0b",
-  4: "#f59e0b",
+  0: "var(--chart-normal)",
+  1: "var(--chart-alert)",
+  2: "var(--chart-warning)",
+  3: "var(--chart-warning)",
+  4: "var(--chart-warning)",
+};
+
+const CHART_SERIES_COLORS: Record<ChartMetric, string> = {
+  count: "rgb(var(--teal-500))",
+  duration: "rgb(var(--chart-duration))",
 };
 
 const ANOMALY_LABELS: Record<number, string> = {
@@ -103,10 +108,10 @@ function AnomalyDot({ cx, cy, payload, metric }: AnomalyDotProps) {
           stroke={color} strokeWidth={1} strokeDasharray="3 2" opacity={0.5} />
       )}
       {isObvious && (
-        <circle cx={cx} cy={cy} r={6} fill={`${color}20`} stroke={`${color}60`} strokeWidth={1} />
+        <circle cx={cx} cy={cy} r={6} fill={color} fillOpacity={0.125} stroke={color} strokeOpacity={0.375} strokeWidth={1} />
       )}
       <circle cx={cx} cy={cy} r={isObvious ? 3 : 2} fill={color}
-        stroke="#0f172a" strokeWidth={isObvious ? 1.5 : 1} />
+        stroke="var(--chart-marker-outline)" strokeWidth={isObvious ? 1.5 : 1} />
     </g>
   );
 }
@@ -146,17 +151,17 @@ function CustomTooltip({
     anomalyFlag != null ? ANOMALY_LABELS[anomalyFlag] : null;
 
   return (
-    <div className="bg-navy-800 border border-navy-600 rounded-xl px-3.5 py-2.5 shadow-xl text-xs space-y-1">
-      <p className="text-slate-400 font-mono">{label}</p>
+    <div className="bg-panel border border-outline rounded-xl px-3.5 py-2.5 shadow-xl text-xs space-y-1">
+      <p className="text-fg-secondary font-mono">{label}</p>
       {metric === "count" ? (
-        <p className="text-white font-semibold">
+        <p className="text-fg-strong font-semibold">
           {countLabel}:{" "}
           <span className="text-teal-400 text-sm">{point.ship_cnt}</span>
         </p>
       ) : (
-        <p className="text-white font-semibold">
+        <p className="text-fg-strong font-semibold">
           平均时长:{" "}
-          <span className="text-sky-400 text-sm">{point.duration ?? "—"}</span>
+          <span className="text-chart-duration text-sm">{point.duration ?? "—"}</span>
         </p>
       )}
       {flagColor && flagLabel && (
@@ -169,18 +174,18 @@ function CustomTooltip({
         </p>
       )}
       {metric === "duration" && point.duration_status && (
-        <p className="text-slate-300">
-          数据状态: <span className="text-slate-500">{point.duration_status}</span>
+        <p className="text-fg-subtle">
+          数据状态: <span className="text-fg-muted">{point.duration_status}</span>
         </p>
       )}
       {metric === "count" && (point.ratio_low != null || point.ratio_high != null) && (
-        <p className="text-slate-500">
+        <p className="text-fg-muted">
           数量 L/H: {formatRatio(point.ratio_low)} / {formatRatio(point.ratio_high)}
         </p>
       )}
       {metric === "duration" &&
         (point.duration_ratio_low != null || point.duration_ratio_high != null) && (
-        <p className="text-slate-500">
+        <p className="text-fg-muted">
           时长 L/H: {formatRatio(point.duration_ratio_low)} / {formatRatio(point.duration_ratio_high)}
         </p>
       )}
@@ -206,16 +211,16 @@ function DateInput({
   const ref = useRef<HTMLInputElement>(null);
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs text-slate-500 whitespace-nowrap">{label}</span>
+      <span className="text-xs text-fg-muted whitespace-nowrap">{label}</span>
       <div
         className={cn(
           "flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs",
-          "bg-navy-900 border-navy-600 text-slate-300 cursor-pointer",
+          "bg-canvas border-outline text-fg-subtle cursor-pointer",
           "hover:border-teal-500/40 focus-within:border-teal-500/50 transition-colors",
         )}
         onClick={() => ref.current?.showPicker?.()}
       >
-        <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
+        <Calendar className="w-3 h-3 text-fg-muted shrink-0" />
         <input
           ref={ref}
           type="date"
@@ -223,7 +228,7 @@ function DateInput({
           min={min}
           max={max}
           onChange={(e) => onChange(e.target.value)}
-          className="bg-transparent outline-none text-slate-300 w-[88px] cursor-pointer"
+          className="bg-transparent outline-none text-fg-subtle w-[88px] cursor-pointer"
         />
       </div>
     </div>
@@ -480,7 +485,7 @@ export default function ShipCntChart({
   };
 
   const controls = (
-    <div className={cn("space-y-3", controlsContainer && "rounded-xl border border-navy-700 bg-navy-800/80 px-5 py-4")}>
+    <div className={cn("space-y-3", controlsContainer && "rounded-xl border border-divider bg-panel/80 px-5 py-4")}>
       {/* ── Row 1: Title + Pipe selector + Refresh ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2.5">
@@ -488,10 +493,10 @@ export default function ShipCntChart({
             <Ship className="w-4 h-4 text-teal-400" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold text-fg-strong">
               {dashboard ? (dimension === "port" ? "港口概览" : "通航概览") : metric === "count" ? title : "平均时长"}
             </h2>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-fg-muted">
               {dashboard ? (dimension === "port" ? "Port overview · 数量与在港时长" : "Traffic overview · 数量与通行时长") : metric === "count" ? subtitle : "Average duration"}
             </p>
           </div>
@@ -501,7 +506,7 @@ export default function ShipCntChart({
           {/* Metric selector */}
           {showDuration && !dashboard && (
           <div
-            className="flex items-center gap-1 bg-navy-900 rounded-lg p-0.5 border border-navy-700"
+            className="flex items-center gap-1 bg-canvas rounded-lg p-0.5 border border-divider"
             role="group"
             aria-label="选择图表"
           >
@@ -518,7 +523,7 @@ export default function ShipCntChart({
                   "px-2.5 py-1 rounded-md text-xs font-medium transition-all",
                   metric === option.value
                     ? "bg-teal-500/20 text-teal-400 border border-teal-500/30"
-                    : "text-slate-500 hover:text-slate-300 border border-transparent",
+                    : "text-fg-muted hover:text-fg-subtle border border-transparent",
                 )}
               >
                 {option.label}
@@ -533,7 +538,7 @@ export default function ShipCntChart({
             onChange={(e) => setSelectedPipe(e.target.value)}
             className={cn(
               "text-xs rounded-lg px-3 py-1.5 border",
-              "bg-navy-900 border-navy-600 text-slate-300",
+              "bg-canvas border-outline text-fg-subtle",
               "focus:outline-none focus:border-teal-500/50 cursor-pointer",
             )}
           >
@@ -550,7 +555,7 @@ export default function ShipCntChart({
             disabled={loading}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all",
-              "border border-navy-600 text-slate-400",
+              "border border-outline text-fg-secondary",
               "hover:text-teal-400 hover:border-teal-500/30 hover:bg-teal-500/5",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
@@ -563,7 +568,7 @@ export default function ShipCntChart({
       {/* ── Row 2: Date pickers + Quick-select buttons ── */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Quick-select */}
-        <div className="flex items-center gap-1 bg-navy-900 rounded-lg p-0.5 border border-navy-700">
+        <div className="flex items-center gap-1 bg-canvas rounded-lg p-0.5 border border-divider">
           {TIME_WINDOWS.map((w) => (
             <button
               key={w.label}
@@ -572,7 +577,7 @@ export default function ShipCntChart({
                 "px-2.5 py-1 rounded-md text-xs font-medium transition-all",
                 activeWindow === w.days
                   ? "bg-teal-500/20 text-teal-400 border border-teal-500/30"
-                  : "text-slate-500 hover:text-slate-300",
+                  : "text-fg-muted hover:text-fg-subtle",
               )}
             >
               {w.label}
@@ -581,7 +586,7 @@ export default function ShipCntChart({
         </div>
 
         {/* Divider */}
-        <span className="text-slate-700 text-xs select-none">|</span>
+        <span className="text-outline text-xs select-none">|</span>
 
         {/* Date pickers */}
         <DateInput
@@ -591,7 +596,7 @@ export default function ShipCntChart({
           max={endDate || maxDate}
           onChange={handleStartDateChange}
         />
-        <span className="text-slate-600 text-xs">—</span>
+        <span className="text-fg-quiet text-xs">—</span>
         <DateInput
           label="至"
           value={endDate}
@@ -602,16 +607,16 @@ export default function ShipCntChart({
 
         {/* Data count hint */}
         {data.length > 0 && (
-          <span className="ml-auto text-xs text-slate-600 font-mono">
+          <span className="ml-auto text-xs text-fg-quiet font-mono">
             {data.length} 条记录
           </span>
         )}
       </div>
 
       {dashboard && (
-        <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-300">
+        <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-fg-subtle">
           <legend className="sr-only">显示图表</legend>
-          <span className="text-xs text-slate-500" aria-hidden="true">显示图表</span>
+          <span className="text-xs text-fg-muted" aria-hidden="true">显示图表</span>
           {([
             { key: "count", label: countLabel },
             { key: "duration", label: durationLabel },
@@ -634,50 +639,50 @@ export default function ShipCntChart({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className={cn("rounded-xl border border-navy-700 bg-navy-800/80 px-5 py-4 space-y-3", dashboard && "space-y-5")}>
+    <div className={cn("rounded-xl border border-divider bg-panel/80 px-5 py-4 space-y-3", dashboard && "space-y-5")}>
       {controlsContainer ? createPortal(controls, controlsContainer) : controls}
 
       {dashboard && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Traffic summary">
-          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
-            <p className="text-xs text-slate-500">{dimension === "port" ? "最新停靠量" : "最新通航量"}</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{loading ? "—" : latest?.ship_cnt ?? "—"}<span className="ml-1 text-xs font-normal text-slate-500">艘</span></p>
-            <p className="mt-1 text-xs text-slate-500">{latest?.date ?? "暂无数据"}</p>
+          <div className="rounded-xl border border-divider bg-canvas/60 p-4">
+            <p className="text-xs text-fg-muted">{dimension === "port" ? "最新停靠量" : "最新通航量"}</p>
+            <p className="mt-2 text-2xl font-semibold text-fg-strong">{loading ? "—" : latest?.ship_cnt ?? "—"}<span className="ml-1 text-xs font-normal text-fg-muted">艘</span></p>
+            <p className="mt-1 text-xs text-fg-muted">{latest?.date ?? "暂无数据"}</p>
           </div>
-          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
-            <p className="text-xs text-slate-500">较前一日</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{loading || dailyChange == null ? "—" : `${dailyChange > 0 ? "+" : ""}${dailyChange}`}<span className="ml-1 text-xs font-normal text-slate-500">艘</span></p>
-            <p className="mt-1 text-xs text-slate-500">{dailyPercent != null ? `${dailyPercent > 0 ? "+" : ""}${dailyPercent.toFixed(1)}%` : "无可比百分比"}</p>
+          <div className="rounded-xl border border-divider bg-canvas/60 p-4">
+            <p className="text-xs text-fg-muted">较前一日</p>
+            <p className="mt-2 text-2xl font-semibold text-fg-strong">{loading || dailyChange == null ? "—" : `${dailyChange > 0 ? "+" : ""}${dailyChange}`}<span className="ml-1 text-xs font-normal text-fg-muted">艘</span></p>
+            <p className="mt-1 text-xs text-fg-muted">{dailyPercent != null ? `${dailyPercent > 0 ? "+" : ""}${dailyPercent.toFixed(1)}%` : "无可比百分比"}</p>
           </div>
-          <div className="rounded-xl border border-navy-700 bg-navy-900/60 p-4">
-            <p className="text-xs text-slate-500">{dimension === "port" ? "停靠量异常状态" : "通航量异常状态"}</p>
-            <p className="mt-2 text-2xl font-semibold" style={{ color: anomalyColor(latestFlag ?? null) ?? "#94a3b8" }}>{loading ? "—" : statusLabel}</p>
-            <p className="mt-1 text-xs text-slate-500">{latest?.direction ? directionLabel[latest.direction] ?? "未知" : "尚无检测结果"}</p>
+          <div className="rounded-xl border border-divider bg-canvas/60 p-4">
+            <p className="text-xs text-fg-muted">{dimension === "port" ? "停靠量异常状态" : "通航量异常状态"}</p>
+            <p className="mt-2 text-2xl font-semibold text-fg-secondary" style={{ color: anomalyColor(latestFlag ?? null) ?? undefined }}>{loading ? "—" : statusLabel}</p>
+            <p className="mt-1 text-xs text-fg-muted">{latest?.direction ? directionLabel[latest.direction] ?? "未知" : "尚无检测结果"}</p>
           </div>
         </div>
       )}
 
       {displayedMetrics.length > 0 && (
-        <section className={dashboard ? "border-t border-navy-700 pt-4 space-y-3" : undefined} aria-label="Traffic chart">
+        <section className={dashboard ? "border-t border-divider pt-4 space-y-3" : undefined} aria-label="Traffic chart">
           {dashboard && (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-medium text-slate-200">{`${countLabel}与${durationLabel}`}</h3>
-              <span className="text-xs text-slate-500">{"点击日期查看当日分析日志"}</span>
+              <h3 className="text-sm font-medium text-fg">{`${countLabel}与${durationLabel}`}</h3>
+              <span className="text-xs text-fg-muted">{"点击日期查看当日分析日志"}</span>
             </div>
           )}
       {/* ── Chart ── */}
       <div className={cn("relative", dashboard ? "h-[350px]" : "h-52")}>
         {displayedMetrics.length === 1 && displayedMetrics[0] === "duration" && durationSamples === 0 && !loading && !error && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">{`该时段暂无有效${durationLabel}数据`}</div>
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-fg-muted">{`该时段暂无有效${durationLabel}数据`}</div>
         )}
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-navy-800/60 rounded-lg z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-panel/60 rounded-lg z-10">
             <RefreshCw className="w-5 h-5 animate-spin text-teal-500" />
           </div>
         )}
 
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center text-red-400 text-xs">
+          <div className="absolute inset-0 flex items-center justify-center text-danger text-xs">
             {error}
           </div>
         )}
@@ -700,8 +705,8 @@ export default function ShipCntChart({
                   x2="0"
                   y2="1"
                 >
-                  <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                  <stop offset="5%" stopColor={CHART_SERIES_COLORS.count} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={CHART_SERIES_COLORS.count} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient
                   id="durationGradient"
@@ -710,14 +715,14 @@ export default function ShipCntChart({
                   x2="0"
                   y2="1"
                 >
-                  <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
+                  <stop offset="5%" stopColor={CHART_SERIES_COLORS.duration} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={CHART_SERIES_COLORS.duration} stopOpacity={0} />
                 </linearGradient>
               </defs>
 
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#1e2d3d"
+                stroke="var(--chart-grid)"
                 vertical={false}
               />
 
@@ -725,15 +730,15 @@ export default function ShipCntChart({
                 dataKey="date"
                 tickFormatter={tickFormatter}
                 interval={tickInterval}
-                tick={{ fontSize: 10, fill: "#64748b" }}
-                axisLine={{ stroke: "#1e2d3d" }}
+                tick={{ fontSize: 10, fill: "rgb(var(--fg-muted))" }}
+                axisLine={{ stroke: "var(--chart-grid)" }}
                 tickLine={false}
                 label={{
                   value: "日期",
                   position: "insideBottomRight",
                   offset: -4,
                   fontSize: 10,
-                  fill: "#475569",
+                  fill: "var(--chart-label)",
                 }}
               />
 
@@ -744,7 +749,7 @@ export default function ShipCntChart({
                 dataKey={axisMetric === "count" ? "ship_cnt" : "duration"}
                 orientation={dashboard && axisMetric === "duration" ? "right" : "left"}
                 allowDecimals={axisMetric !== "count"}
-                tick={{ fontSize: 10, fill: "#64748b" }}
+                tick={{ fontSize: 10, fill: "rgb(var(--fg-muted))" }}
                 axisLine={false}
                 tickLine={false}
                 label={{
@@ -753,7 +758,7 @@ export default function ShipCntChart({
                   position: dashboard && axisMetric === "duration" ? "insideRight" : "insideLeft",
                   offset: 20,
                   fontSize: 10,
-                  fill: "#475569",
+                  fill: "var(--chart-label)",
                 }}
               />
 
@@ -775,15 +780,15 @@ export default function ShipCntChart({
                 yAxisId={metric}
                 type="monotone"
                 dataKey={metric === "count" ? "ship_cnt" : "duration"}
-                stroke={metric === "count" ? "#14b8a6" : "#38bdf8"}
+                stroke={CHART_SERIES_COLORS[metric]}
                 strokeWidth={1.5}
                 fill={metric === "count" ? "url(#shipCntGradient)" : "url(#durationGradient)"}
                 connectNulls={false}
                 dot={(props) => <AnomalyDot {...props as unknown as AnomalyDotProps} metric={metric} />}
                 activeDot={{
                   r: 4,
-                  fill: metric === "count" ? "#14b8a6" : "#38bdf8",
-                  stroke: "#0f172a",
+                  fill: CHART_SERIES_COLORS[metric],
+                  stroke: "var(--chart-marker-outline)",
                   strokeWidth: 2,
                 }}
                 isAnimationActive={true}
@@ -796,35 +801,31 @@ export default function ShipCntChart({
       </div>
 
           {dashboard && visiblePlots.duration && (
-            <p className="text-xs text-slate-500">{durationSamples} / {data.length} 天有时长数据 · 缺失或零值不连线</p>
+            <p className="text-xs text-fg-muted">{durationSamples} / {data.length} 天有时长数据 · 缺失或零值不连线</p>
           )}
         </section>
       )}
 
       {/* ── Legend ── */}
       {displayedMetrics.length > 0 && (
-      <div className="flex items-center gap-4 text-xs text-slate-500 pt-0.5">
+      <div className="flex items-center gap-4 text-xs text-fg-muted pt-0.5">
         {displayedMetrics.map((visibleMetric) => (
           <div key={visibleMetric} className="flex items-center gap-1.5">
-            <span className={cn("inline-block w-3 h-0.5 rounded", visibleMetric === "count" ? "bg-teal-500" : "bg-sky-400")} />
+            <span className={cn("inline-block w-3 h-0.5 rounded", visibleMetric === "count" ? "bg-teal-500" : "bg-chart-duration")} />
             <span>{visibleMetric === "count" ? countLabel : "平均时长"}</span>
           </div>
         ))}
-        {([
-          { color: "#ef4444", label: "红灯" },
-          { color: "#f59e0b", label: "黄灯" },
-          { color: "#10b981", label: "绿灯" },
-        ] as { color: string; label: string }[]).map(({ color, label }) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <svg width="14" height="14" viewBox="0 0 14 14">
-              <circle cx="7" cy="7" r="5" fill={`${color}20`} stroke={`${color}60`} strokeWidth="1" />
-              <circle cx="7" cy="7" r="3" fill={color} stroke="#0f172a" strokeWidth="1.5" />
+        {[1, 2, 0].map((flag) => (
+          <div key={flag} className="flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 14 14" style={{ color: ANOMALY_COLORS[flag] }}>
+              <circle cx="7" cy="7" r="5" fill="currentColor" fillOpacity={0.125} stroke="currentColor" strokeOpacity={0.375} strokeWidth="1" />
+              <circle cx="7" cy="7" r="3" fill="currentColor" stroke="var(--chart-marker-outline)" strokeWidth="1.5" />
             </svg>
-            <span>{label}</span>
+            <span>{ANOMALY_LABELS[flag]}</span>
           </div>
         ))}
         {selectedPipe && (
-          <span className="ml-auto text-slate-600 font-mono">
+          <span className="ml-auto text-fg-quiet font-mono">
             {selectedPipe}
           </span>
         )}

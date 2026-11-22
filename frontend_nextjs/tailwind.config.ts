@@ -9,19 +9,33 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        navy: {
-          900: "#0a0f1e",
-          800: "#0f1729",
-          700: "#1a2540",
-          600: "#1e2d4d",
-          500: "#243660",
+        canvas: "rgb(var(--canvas) / <alpha-value>)",
+        panel: "rgb(var(--panel) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        divider: "rgb(var(--divider) / <alpha-value>)",
+        outline: {
+          DEFAULT: "rgb(var(--outline) / <alpha-value>)",
+          strong: "rgb(var(--outline-strong) / <alpha-value>)",
+        },
+        fg: {
+          DEFAULT: "rgb(var(--fg) / <alpha-value>)",
+          strong: "rgb(var(--fg-strong) / <alpha-value>)",
+          subtle: "rgb(var(--fg-subtle) / <alpha-value>)",
+          secondary: "rgb(var(--fg-secondary) / <alpha-value>)",
+          muted: "rgb(var(--fg-muted) / <alpha-value>)",
+          quiet: "rgb(var(--fg-quiet) / <alpha-value>)",
         },
         teal: {
-          400: "#2dd4bf",
-          500: "#14b8a6",
-          600: "#0d9488",
+          400: "rgb(var(--teal-400) / <alpha-value>)",
+          500: "rgb(var(--teal-500) / <alpha-value>)",
         },
-        accent: "#4a6cf7",
+        "brand-emphasis": "rgb(var(--brand-emphasis) / <alpha-value>)",
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
+        info: "rgb(var(--info) / <alpha-value>)",
+        "chart-duration": "rgb(var(--chart-duration) / <alpha-value>)",
+        overlay: "rgb(var(--shadow-overlay))",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

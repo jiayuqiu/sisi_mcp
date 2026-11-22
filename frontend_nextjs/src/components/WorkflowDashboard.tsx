@@ -49,9 +49,9 @@ function Badge({ type }: { type: string | null }) {
   const label = type ?? "unknown";
   const colorMap: Record<string, string> = {
     detection: "bg-teal-500/15 text-teal-400 border-teal-500/30",
-    weather_news: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    analysis: "bg-accent/15 text-blue-400 border-accent/30",
-    unknown: "bg-slate-500/15 text-slate-400 border-slate-500/30",
+    weather_news: "bg-amber-500/15 text-warning border-amber-500/30",
+    analysis: "bg-accent/15 text-info border-accent/30",
+    unknown: "bg-fg-muted/15 text-fg-secondary border-fg-muted/30",
   };
   const cls = colorMap[label] ?? colorMap.unknown;
   return (
@@ -89,22 +89,22 @@ function LogCard({ log }: { log: LogEntry }) {
   return (
     <div
       className={cn(
-        "group rounded-xl border border-navy-700 bg-navy-800/80 transition-all duration-200",
-        "hover:border-navy-600 hover:bg-navy-800",
+        "group rounded-xl border border-divider bg-panel/80 transition-all duration-200",
+        "hover:border-outline hover:bg-panel",
       )}
     >
       {/* Card header */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
-            className="text-xs font-mono text-slate-600 truncate max-w-[160px]"
+            className="text-xs font-mono text-fg-quiet truncate max-w-[160px]"
             title={log.return_id}
           >
             #{log.return_id}
           </span>
           <Badge type={log.question_type} />
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
+        <div className="flex items-center gap-3 text-xs text-fg-muted">
           {log.pipe_name && (
             <span className="flex items-center gap-1.5">
               <Waves className="w-3.5 h-3.5" />
@@ -123,15 +123,15 @@ function LogCard({ log }: { log: LogEntry }) {
         {/* Content section */}
         {(log.content || !log.reasoning_content) && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
               <FileText className="w-3.5 h-3.5" />
               Content
             </div>
-            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+            <p className="text-sm text-fg-subtle leading-relaxed whitespace-pre-wrap break-words">
               {expanded
                 ? log.content
                 : (contentPreview ?? (
-                    <span className="text-slate-600 italic">No content</span>
+                    <span className="text-fg-quiet italic">No content</span>
                   ))}
             </p>
           </div>
@@ -140,15 +140,15 @@ function LogCard({ log }: { log: LogEntry }) {
         {/* Reasoning section */}
         {(log.reasoning_content || expanded) && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
               <Brain className="w-3.5 h-3.5" />
               Reasoning
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap break-words bg-navy-900/50 rounded-lg px-3 py-2.5 border border-navy-700/50">
+            <p className="text-sm text-fg-secondary leading-relaxed whitespace-pre-wrap break-words bg-canvas/50 rounded-lg px-3 py-2.5 border border-divider/50">
               {expanded
                 ? log.reasoning_content
                 : (reasoningPreview ?? (
-                    <span className="text-slate-600 italic">No reasoning</span>
+                    <span className="text-fg-quiet italic">No reasoning</span>
                   ))}
             </p>
           </div>
@@ -158,7 +158,7 @@ function LogCard({ log }: { log: LogEntry }) {
         {hasLongContent && (
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 transition-colors pt-1"
+            className="flex items-center gap-1 text-xs text-teal-400 hover:text-brand-emphasis transition-colors pt-1"
           >
             {expanded ? (
               <>
@@ -281,10 +281,10 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
               <Activity className="w-4.5 h-4.5 text-teal-400" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-white">
+              <h1 className="text-lg font-semibold text-fg-strong">
                 分析日志
               </h1>
-              <p className="text-xs text-slate-500">{total} agent call records</p>
+              <p className="text-xs text-fg-muted">{total} agent call records</p>
             </div>
           </div>
           <button
@@ -292,7 +292,7 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
             disabled={loading}
             className={cn(
               "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm transition-all",
-              "border border-navy-600 text-slate-400",
+              "border border-outline text-fg-secondary",
               "hover:text-teal-400 hover:border-teal-500/30 hover:bg-teal-500/5",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
@@ -302,9 +302,9 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
           </button>
         </div>
 
-        <div className="flex-shrink-0 rounded-xl border border-navy-700 bg-navy-800/60 px-3 py-3 space-y-2">
+        <div className="flex-shrink-0 rounded-xl border border-divider bg-panel/60 px-3 py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-3">
-            <label htmlFor="log-date" className="flex items-center gap-1.5 text-xs text-slate-400">
+            <label htmlFor="log-date" className="flex items-center gap-1.5 text-xs text-fg-secondary">
               <Calendar className="h-3.5 w-3.5" />
               日志日期
             </label>
@@ -313,25 +313,25 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
               value={selectedDate ?? ""}
               disabled={datesLoading || datesError || availableDates.length === 0}
               onChange={(event) => selectLogDate(event.target.value)}
-              className="min-w-0 rounded-lg border border-navy-600 bg-navy-900 px-2.5 py-1.5 text-sm text-slate-300 [color-scheme:dark] focus:outline-none focus:border-teal-500/50 disabled:opacity-50"
+              className="min-w-0 rounded-lg border border-outline bg-canvas px-2.5 py-1.5 text-sm text-fg-subtle focus:outline-none focus:border-teal-500/50 disabled:opacity-50"
             >
               <option value="">{datesLoading ? "加载日期…" : datesError ? "日期加载失败" : availableDates.length === 0 ? "暂无日志日期" : "全部有日志的日期"}</option>
               {availableDates.map((date) => <option key={date} value={date}>{date}</option>)}
             </select>
             {selectedDate && (
-              <button onClick={() => { setSelectedDate(null); setPage(0); }} className="text-xs text-teal-400 hover:text-teal-200">清除日期</button>
+              <button onClick={() => { setSelectedDate(null); setPage(0); }} className="text-xs text-teal-400 hover:text-brand-emphasis">清除日期</button>
             )}
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-fg-muted">
             {selectedDate ? `${selectedDate} · 当日分析` : `${filterStart || "—"} — ${filterEnd || "—"} · 全部日期`}
           </p>
         </div>
 
-        <p className="text-xs text-slate-500">仅可选择有分析日志的日期</p>
+        <p className="text-xs text-fg-muted">仅可选择有分析日志的日期</p>
 
         {/* Error */}
         {error && (
-          <div className="flex-shrink-0 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          <div className="flex-shrink-0 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-danger text-sm">
             {error}
           </div>
         )}
@@ -339,15 +339,15 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
         {/* Cards list */}
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
           {loading && (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+            <div className="flex flex-col items-center justify-center py-20 text-fg-muted">
               <RefreshCw className="w-6 h-6 animate-spin text-teal-500 mb-3" />
               <span className="text-sm">Loading records...</span>
             </div>
           )}
 
           {!loading && logs.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-              <FileText className="w-8 h-8 mb-3 text-slate-600" />
+            <div className="flex flex-col items-center justify-center py-20 text-fg-muted">
+              <FileText className="w-8 h-8 mb-3 text-fg-quiet" />
               <span className="text-sm">No workflow logs found</span>
             </div>
           )}
@@ -357,7 +357,7 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
 
         {/* Pagination */}
         <div className="flex-shrink-0 flex items-center justify-between pt-1">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-fg-muted">
             Page {page + 1} of {totalPages}
           </span>
           <div className="flex items-center gap-2">
@@ -366,8 +366,8 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
               disabled={page === 0 || loading}
               className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
-                "border border-navy-600 text-slate-400",
-                "hover:text-slate-200 hover:border-navy-500",
+                "border border-outline text-fg-secondary",
+                "hover:text-fg hover:border-outline-strong",
                 "disabled:opacity-40 disabled:cursor-not-allowed",
               )}
             >
@@ -379,8 +379,8 @@ export default function WorkflowDashboard({ dimension }: { dimension: "pipe" | "
               disabled={page >= totalPages - 1 || loading}
               className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all",
-                "border border-navy-600 text-slate-400",
-                "hover:text-slate-200 hover:border-navy-500",
+                "border border-outline text-fg-secondary",
+                "hover:text-fg hover:border-outline-strong",
                 "disabled:opacity-40 disabled:cursor-not-allowed",
               )}
             >

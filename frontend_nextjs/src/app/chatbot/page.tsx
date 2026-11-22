@@ -56,7 +56,7 @@ function pickWorkflowOutputText(outputs: unknown): string {
 function TypingIndicator() {
   return (
     <div className="flex gap-2 items-center px-1 py-1">
-      <span className="text-xs text-teal-400/70">思考中</span>
+      <span className="text-xs text-teal-400">思考中</span>
       <div className="flex gap-1 items-center">
         <div className="typing-dot" />
         <div className="typing-dot" />
@@ -94,7 +94,7 @@ function ChatBubble({ msg }: { msg: Message }) {
           "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
           isUser
             ? "bg-accent text-white rounded-tr-sm"
-            : "bg-navy-700 border border-navy-600 text-slate-200 rounded-tl-sm"
+            : "bg-surface border border-outline text-fg rounded-tl-sm"
         )}
       >
         {msg.streaming && <TypingIndicator />}
@@ -331,8 +331,8 @@ export default function ChatbotPage() {
       )}
 
       {/* Input area */}
-      <div className="flex-shrink-0 flex items-end gap-3 bg-navy-800 border border-navy-600 rounded-2xl px-4 py-3 focus-within:border-teal-500/50 transition-colors">
-        <Anchor className="w-4 h-4 text-slate-500 mb-2 flex-shrink-0" />
+      <div className="flex-shrink-0 flex items-end gap-3 bg-panel border border-outline rounded-2xl px-4 py-3 focus-within:border-teal-500/50 transition-colors">
+        <Anchor className="w-4 h-4 text-fg-muted mb-2 flex-shrink-0" />
         <textarea
           ref={textareaRef}
           value={input}
@@ -341,7 +341,7 @@ export default function ChatbotPage() {
           placeholder="输入你的问题... (Enter 发送，Shift+Enter 换行)"
           rows={1}
           disabled={loading}
-          className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none leading-relaxed disabled:opacity-50"
+          className="flex-1 bg-transparent text-sm text-fg placeholder-fg-muted resize-none outline-none leading-relaxed disabled:opacity-50"
           style={{ maxHeight: 120 }}
         />
         <button
@@ -351,7 +351,7 @@ export default function ChatbotPage() {
             "flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150 mb-0.5",
             input.trim() && !loading
               ? "bg-teal-500 hover:bg-teal-400 text-white shadow-lg shadow-teal-500/20"
-              : "bg-navy-700 text-slate-600 cursor-not-allowed"
+              : "bg-surface text-fg-quiet cursor-not-allowed"
           )}
         >
           <Send className="w-4 h-4" />
