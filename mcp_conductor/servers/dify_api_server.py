@@ -10,6 +10,7 @@ import asyncio
 import re
 import calendar
 import sqlite3
+from datetime import date, timedelta
 from pathlib import Path
 
 # Configure logging early, before other imports create their loggers
@@ -24,9 +25,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import the actual tool functions
-from mcp_conductor.analyzer.congestion import analyze_congestion
+from mcp_conductor.analyzer.congestion import AnomalyHistory, analyze_congestion
+from mcp_conductor.analyzer.logistics import LogisticsAssessment
 # from mcp_conductor.detector.plot_ship_congestion import plot_ship_congestion
 from mcp_conductor.resources.utils.db import save_worklog_entry
+from mcp_conductor.resources.utils.sisi_dataclasses import ROLLING_PERCENTILE_FLAG as FLAG
 
 logger = logging.getLogger("dify_api")
 
@@ -394,6 +397,78 @@ async def detect_anomaly(request: QuestionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _load_anomaly_history(
+    conn: sqlite3.Connection, location_type: str, pipe_name: str, run_day: date
+) -> AnomalyHistory:
+    start_7 = run_day - timedelta(days=6)
+    start_30 = run_day - timedelta(days=29)
+    anomaly_7, scored_7, anomaly_30, scored_30 = conn.execute(
+        """
+        WITH daily_flags AS (
+            SELECT date_id,
+                   (anomaly_flag = :anomaly OR duration_anomaly_flag = :anomaly) AS is_anomaly,
+                   (anomaly_flag IN (:normal, :anomaly)
+                    OR duration_anomaly_flag IN (:normal, :anomaly)) AS is_scored
+            FROM vw_m_pipe_anomaly_roll_percentile
+            WHERE location_type = :location_type AND pipe_name = :pipe_name
+              AND date_id BETWEEN :start_30 AND :end_date
+        )
+        SELECT COUNT(*) FILTER (WHERE date_id >= :start_7 AND is_anomaly),
+               COUNT(*) FILTER (WHERE date_id >= :start_7 AND is_scored),
+               COUNT(*) FILTER (WHERE is_anomaly),
+               COUNT(*) FILTER (WHERE is_scored)
+        FROM daily_flags
+        """,
+        {
+            "anomaly": FLAG.ANOMALY,
+            "normal": FLAG.NORMAL,
+            "location_type": location_type,
+            "pipe_name": pipe_name,
+            "start_7": int(start_7.strftime("%Y%m%d")),
+            "start_30": int(start_30.strftime("%Y%m%d")),
+            "end_date": int(run_day.strftime("%Y%m%d")),
+        },
+    ).fetchone()
+    return {
+        "last_7_days": {"anomaly_days": anomaly_7, "scored_days": scored_7},
+        "last_30_days": {"anomaly_days": anomaly_30, "scored_days": scored_30},
+    }
+
+
+def _format_anomaly_history(history: AnomalyHistory) -> str:
+    lines = []
+    for days, window in ((7, history["last_7_days"]), (30, history["last_30_days"])):
+        scored_days = window["scored_days"]
+        if scored_days:
+            lines.append(f"近{days}天：异常{window['anomaly_days']}天（有检测结果{scored_days}天）。")
+        else:
+            lines.append(f"近{days}天：无可用检测结果。")
+    return "\n".join(lines)
+
+
+def _format_logistics_assessment(assessment: LogisticsAssessment) -> str:
+    confidence = {"low": "低", "medium": "中", "high": "高"}[assessment["confidence"]]
+    scope = {"local": "局部", "regional": "区域", "global": "全球", "unknown": "待核实"}[
+        assessment["impact_scope"]
+    ]
+    stakeholder_labels = {
+        "ports_and_terminals": "港口和码头",
+        "carriers": "船东和承运人",
+        "shippers_and_forwarders": "货主和货代",
+    }
+    recommendations = "\n".join(
+        f"- {stakeholder_labels[item['stakeholder']]}：{item['action']}（触发条件：{item['trigger']}）"
+        for item in assessment["recommendations"]
+    )
+    return (
+        "\n\n- 全球航运影响\n"
+        f"{assessment['event_type']}（影响范围：{scope}，置信度：{confidence}）\n"
+        f"{assessment['impact_summary']}\n"
+        f"证据局限：{assessment['evidence_limitations']}\n\n"
+        f"- 行业建议\n{recommendations}"
+    )
+
+
 @app.post("/api/analyze_anomaly_reason")
 async def analyze_anomaly_reason(request: QuestionRequest):
     """Analyze traffic congestion with detailed information"""
@@ -424,7 +499,7 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         # query anomaly detail
         date_id = int(run_date.replace("-", ""))
         with sqlite3.connect(str(DB_PATH)) as conn:
-            _sql = f"""
+            _sql = """
                 SELECT 
                     anomaly_flag,
                     anomaly_ratio,
@@ -448,13 +523,13 @@ async def analyze_anomaly_reason(request: QuestionRequest):
                 _sql,
                 (location_type, pipe_name, date_id),
             ).fetchone()
-        
-        if row is None:
-            logger.info(f"Can't get records from db: {run_date}, {pipe_name}")
-            return {
-                "success": False,
-                "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
-            }
+            if row is None:
+                logger.info("Can't get records from db: %s, %s", run_date, pipe_name)
+                return {
+                    "success": False,
+                    "message": f"未找到 {run_date} {pipe_name} 的检测结果，请确认日期和通道名称是否正确。"
+                }
+            anomaly_history = _load_anomaly_history(conn, location_type, pipe_name, date.fromisoformat(run_date))
         
         (
             anomaly_flag,
@@ -476,7 +551,8 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         regime = regime or "UNKNOWN"
 
         # trigger analysis
-        analysis = analyze_congestion(
+        analysis = await asyncio.to_thread(
+            analyze_congestion,
             pipe_name,
             run_date,
             location_type=location_type,
@@ -487,6 +563,7 @@ async def analyze_anomaly_reason(request: QuestionRequest):
             duration_ratio_low=duration_ratio_low,
             duration_ratio_high=duration_ratio_high,
             regime=regime,
+            anomaly_history=anomaly_history,
         )
 
         combined_reason_text = "\n".join(
@@ -518,11 +595,16 @@ async def analyze_anomaly_reason(request: QuestionRequest):
         result_text = (
             "- 结论\n"
             f"{conclusion}\n\n"
+            "- 异常天数\n"
+            f"{_format_anomaly_history(anomaly_history)}\n\n"
             "- 天气因素\n"
             f"{weather_factor}\n\n"
             "- 政治因素\n"
             f"{political_factor}"
         )
+        assessment = analysis.get("logistics_assessment")
+        if assessment is not None:
+            result_text += _format_logistics_assessment(assessment)
 
         logger.info(f"Analysis completed for {run_date} {pipe_name}")
         return {
@@ -534,6 +616,9 @@ async def analyze_anomaly_reason(request: QuestionRequest):
             "conclusion": conclusion,
             "weather_factor": weather_factor,
             "political_factor": political_factor,
+            "anomaly_history": anomaly_history,
+            "logistics_status": analysis["logistics_status"],
+            **({"logistics_assessment": assessment} if assessment is not None else {}),
             "anomaly_ratio": anomaly_ratio,
             "ratio_low": ratio_low,
             "ratio_high": ratio_high,

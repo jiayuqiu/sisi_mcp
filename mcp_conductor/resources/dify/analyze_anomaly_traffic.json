@@ -72,6 +72,45 @@
           "question"
         ]
       },
+      "AnomalyHistoryWindow": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "anomaly_days": {"type": "integer", "minimum": 0},
+          "scored_days": {"type": "integer", "minimum": 0}
+        },
+        "required": ["anomaly_days", "scored_days"]
+      },
+      "LogisticsAssessment": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_type": {"type": "string", "minLength": 1},
+          "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+          "impact_scope": {"type": "string", "enum": ["local", "regional", "global", "unknown"]},
+          "impact_summary": {"type": "string", "minLength": 1},
+          "evidence_limitations": {"type": "string", "minLength": 1},
+          "recommendations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "stakeholder": {
+                  "type": "string",
+                  "enum": ["ports_and_terminals", "carriers", "shippers_and_forwarders"]
+                },
+                "action": {"type": "string", "minLength": 1},
+                "trigger": {"type": "string", "minLength": 1}
+              },
+              "required": ["stakeholder", "action", "trigger"]
+            }
+          }
+        },
+        "required": ["event_type", "confidence", "impact_scope", "impact_summary", "evidence_limitations", "recommendations"]
+      },
       "AnalyzeAnomalySuccessResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -84,7 +123,7 @@
           },
           "result": {
             "type": "string",
-            "description": "汇总文本，格式为结论/天气因素/政治因素三段"
+            "description": "汇总文本，包含结论、异常天数、天气和政治因素；物流评估可用时附加全球航运影响和行业建议"
           },
           "run_date": {
             "type": "string",
@@ -112,6 +151,20 @@
             "type": "string",
             "description": "政治/安全因素分析"
           },
+          "anomaly_history": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "last_7_days": {"$ref": "#/components/schemas/AnomalyHistoryWindow"},
+              "last_30_days": {"$ref": "#/components/schemas/AnomalyHistoryWindow"}
+            },
+            "required": ["last_7_days", "last_30_days"]
+          },
+          "logistics_status": {
+            "type": "string",
+            "enum": ["available", "disabled", "timeout", "unavailable", "invalid_response", "insufficient_evidence"]
+          },
+          "logistics_assessment": {"$ref": "#/components/schemas/LogisticsAssessment"},
           "direction": {
             "type": "string",
             "enum": ["NORMAL", "LOW", "HIGH", "MIXED", "UNKNOWN"],
@@ -181,6 +234,8 @@
           "conclusion",
           "weather_factor",
           "political_factor",
+          "anomaly_history",
+          "logistics_status",
           "direction",
           "ratio_low",
           "ratio_high",

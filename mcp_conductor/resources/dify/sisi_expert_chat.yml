@@ -600,7 +600,8 @@ workflow:
           \n\n    if not political_factor:\n        political_factor = \"未检索到显著政治风险信号。\"\
           \n\n    formatted_output = (\n        \"- 结论\\n\"\n        f\"{conclusion}\\\
           n\\n\"\n        \"- 天气因素\\n\"\n        f\"{weather_factor}\\n\\n\"\n   \
-          \     \"- 政治因素\\n\"\n        f\"{political_factor}\"\n    )\n\n    return\
+          \     \"- 政治因素\\n\"\n        f\"{political_factor}\"\n    )\n\n    if success:\n\
+          \        formatted_output = data.get(\"result\") or formatted_output\n\n    return\
           \ {\n        \"success\": success,\n        \"run_date\": run_date,\n  \
           \      \"pipe_name\": pipe_name,\n        \"conclusion\": conclusion,\n\
           \        \"weather_factor\": weather_factor,\n        \"political_factor\"\

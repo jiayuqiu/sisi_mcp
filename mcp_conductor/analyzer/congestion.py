@@ -4,8 +4,12 @@ weather and geopolitical/news context around the target date.
 """
 import json
 import re
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from time import monotonic
+from typing import NotRequired, TypedDict
 
+from mcp_conductor.analyzer.logistics import LogisticsAssessment, LogisticsStatus, assess_logistics
 from mcp_conductor.resources.deepseek.rest_api import DeepSeekClient
 from mcp_conductor.resources.utils.db import save_to_log
 from mcp_conductor.resources.utils.logger import get_logger
@@ -17,6 +21,74 @@ from mcp_conductor.templates.questions import (
 )
 
 logger = get_logger(__name__)
+
+
+class AnomalyWindow(TypedDict):
+    anomaly_days: int
+    scored_days: int
+
+
+class AnomalyHistory(TypedDict):
+    last_7_days: AnomalyWindow
+    last_30_days: AnomalyWindow
+
+
+class _DeepSeekEvidence(TypedDict):
+    summary: str
+    weather_factor: str
+    political_factor: str
+    sources: str
+    raw_content: str
+    reasoning_content: str
+
+
+class CongestionAnalysis(_DeepSeekEvidence):
+    logistics_status: LogisticsStatus
+    logistics_assessment: NotRequired[LogisticsAssessment]
+
+
+@dataclass(frozen=True)
+class _AnomalyContext:
+    pipe_name: str
+    run_date: date
+    location_type: str
+    direction: str
+    ratio_low: float | None
+    ratio_high: float | None
+    duration_direction: str
+    duration_ratio_low: float | None
+    duration_ratio_high: float | None
+    regime: str
+    anomaly_history: AnomalyHistory | None
+
+    @property
+    def date_id(self) -> int:
+        return int(self.run_date.strftime("%Y%m%d"))
+
+    def format_prompt(self, template: str, **evidence: str) -> str:
+        history = "未提供"
+        if self.anomaly_history is not None:
+            history = json.dumps({
+                name: {
+                    "anomaly_days": window["anomaly_days"] if window["scored_days"] else None,
+                    "scored_days": window["scored_days"],
+                }
+                for name, window in self.anomaly_history.items()
+            })
+        return template.format(
+            date_id=self.date_id,
+            pipe_name=self.pipe_name,
+            location_type=self.location_type,
+            direction=self.direction,
+            ratio_low=self.ratio_low,
+            ratio_high=self.ratio_high,
+            duration_direction=self.duration_direction,
+            duration_ratio_low=self.duration_ratio_low,
+            duration_ratio_high=self.duration_ratio_high,
+            regime=self.regime,
+            anomaly_history=history,
+            **evidence,
+        )
 
 
 def _extract_json_object(text: str) -> dict[str, str] | None:
@@ -71,30 +143,14 @@ def _needs_expansion(weather_factor: str, political_factor: str) -> bool:
 
 def _expand_factors(
     ds_client: DeepSeekClient,
-    run_date_id: int,
-    pipe_name: str,
-    direction: str,
-    ratio_low: float | None,
-    ratio_high: float | None,
-    duration_direction: str,
-    duration_ratio_low: float | None,
-    duration_ratio_high: float | None,
-    regime: str,
+    context: _AnomalyContext,
     summary: str,
     weather_factor: str,
     political_factor: str,
     sources_json: str,
 ) -> tuple[str, str]:
-    prompt = ENRICH_ANOMALY_FACTORS.format(
-        date_id=run_date_id,
-        pipe_name=pipe_name,
-        direction=direction,
-        ratio_low=ratio_low,
-        ratio_high=ratio_high,
-        duration_direction=duration_direction,
-        duration_ratio_low=duration_ratio_low,
-        duration_ratio_high=duration_ratio_high,
-        regime=regime,
+    prompt = context.format_prompt(
+        ENRICH_ANOMALY_FACTORS,
         summary=summary,
         weather_factor=weather_factor or "",
         political_factor=political_factor or "",
@@ -123,41 +179,45 @@ def analyze_congestion(
     duration_direction: str = "UNKNOWN",
     duration_ratio_low: float | None = None,
     duration_ratio_high: float | None = None,
-    llm_client: str | None = None,  # TODO: deepseek, add local llm into here.
+    llm_client: str | None = None,
     regime: str = "UNKNOWN",
-) -> dict[str, str]:
-    """Query DeepSeek for weather/news context on the anomaly date."""
-    run_date_id = int(run_date.replace("-", ""))
-    # The reports need concise evidence, not a long reasoning trace. Disabling
-    # thinking keeps the custom-tool call comfortably inside Dify's timeout.
-    ds_client = DeepSeekClient(return_thinking=False)  # TODO: deepseek, add local llm into here.
+    *,
+    anomaly_history: AnomalyHistory | None = None,
+) -> CongestionAnalysis:
+    """Collect the causes of a traffic anomaly and assess its logistics impact."""
+    started_at = monotonic()
+    context = _AnomalyContext(
+        pipe_name=pipe_name,
+        run_date=datetime.strptime(run_date, "%Y-%m-%d").date(),
+        location_type=location_type,
+        direction=direction,
+        ratio_low=ratio_low,
+        ratio_high=ratio_high,
+        duration_direction=duration_direction,
+        duration_ratio_low=duration_ratio_low,
+        duration_ratio_high=duration_ratio_high,
+        regime=regime,
+        anomaly_history=anomaly_history,
+    )
+    evidence = _collect_deepseek_evidence(context)
+    status, assessment = assess_logistics(context, evidence, started_at=started_at)
+    result: CongestionAnalysis = {**evidence, "logistics_status": status}
+    if assessment is not None:
+        result["logistics_assessment"] = assessment
+    return result
 
-    run_date_obj = datetime.strptime(run_date, "%Y-%m-%d").date()
+
+def _collect_deepseek_evidence(context: _AnomalyContext) -> _DeepSeekEvidence:
+    # Disable thinking to keep the custom-tool call inside Dify's timeout.
+    ds_client = DeepSeekClient(return_thinking=False)
+
     today = datetime.now(timezone.utc).date()
-    if run_date_obj > today:
-        question = WEB_SEARCH_WEATHER_NEWS_WITH_EVIDENCE.format(
-            date_id=run_date_id,
-            pipe_name=pipe_name,
-            direction=direction,
-            ratio_low=ratio_low,
-            ratio_high=ratio_high,
-            duration_direction=duration_direction,
-            duration_ratio_low=duration_ratio_low,
-            duration_ratio_high=duration_ratio_high,
-            regime=regime,
-        )
-    else:
-        question = WEB_SEARCH_WEATHER_NEWS_STRUCTURED.format(
-            date_id=run_date_id,
-            pipe_name=pipe_name,
-            direction=direction,
-            ratio_low=ratio_low,
-            ratio_high=ratio_high,
-            duration_direction=duration_direction,
-            duration_ratio_low=duration_ratio_low,
-            duration_ratio_high=duration_ratio_high,
-            regime=regime,
-        )
+    template = (
+        WEB_SEARCH_WEATHER_NEWS_WITH_EVIDENCE
+        if context.run_date > today
+        else WEB_SEARCH_WEATHER_NEWS_STRUCTURED
+    )
+    question = context.format_prompt(template)
 
     response = ds_client.search_and_ask(question=question)
     logger.info("DeepSeek response: %s", response)
@@ -170,17 +230,7 @@ def analyze_congestion(
 
     # Retry once when the first answer has no usable evidence.
     if not _has_valid_sources(parsed):
-        retry_question = WEB_SEARCH_WEATHER_NEWS_RETRY.format(
-            date_id=run_date_id,
-            pipe_name=pipe_name,
-            direction=direction,
-            ratio_low=ratio_low,
-            ratio_high=ratio_high,
-            duration_direction=duration_direction,
-            duration_ratio_low=duration_ratio_low,
-            duration_ratio_high=duration_ratio_high,
-            regime=regime,
-        )
+        retry_question = context.format_prompt(WEB_SEARCH_WEATHER_NEWS_RETRY)
         retry_response = ds_client.search_and_ask(question=retry_question)
         logger.info("DeepSeek retry response: %s", retry_response)
         retry_message = retry_response["choices"][0]["message"]
@@ -188,7 +238,6 @@ def analyze_congestion(
         retry_parsed = _extract_json_object(retry_content) or {}
         if _has_valid_sources(retry_parsed):
             response = retry_response
-            message = retry_message
             content = retry_content
             reasoning_content = retry_message.get("reasoning_content", "")
             parsed = retry_parsed
@@ -198,22 +247,14 @@ def analyze_congestion(
     political_factor = str(parsed.get("political_factor", "")).strip()
     sources = parsed.get("sources") if isinstance(parsed.get("sources"), list) else []
 
-    normalized_prefix = f"{run_date_id}日，"
+    normalized_prefix = f"{context.date_id}日，"
     summary = re.sub(r"^\s*\d{4}年\d{1,2}月\d{1,2}日，?", normalized_prefix, summary)
 
     if _needs_expansion(weather_factor, political_factor):
         sources_json = json.dumps(sources, ensure_ascii=False)
         weather_factor, political_factor = _expand_factors(
             ds_client=ds_client,
-            run_date_id=run_date_id,
-            pipe_name=pipe_name,
-            direction=direction,
-            ratio_low=ratio_low,
-            ratio_high=ratio_high,
-            duration_direction=duration_direction,
-            duration_ratio_low=duration_ratio_low,
-            duration_ratio_high=duration_ratio_high,
-            regime=regime,
+            context=context,
             summary=summary,
             weather_factor=weather_factor,
             political_factor=political_factor,
@@ -225,10 +266,10 @@ def analyze_congestion(
     save_to_log(
         response,
         payload=question,
-        date_id=run_date_id,
-        pipe_name=pipe_name,
+        date_id=context.date_id,
+        pipe_name=context.pipe_name,
         question_type="weather_news",
-        location_type=location_type,
+        location_type=context.location_type,
     )
     return {
         "summary": summary,

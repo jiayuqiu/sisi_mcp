@@ -229,6 +229,11 @@ class TestDetectAnomaly(unittest.TestCase):
             "summary": "风险摘要。",
             "weather_factor": "天气因素。",
             "political_factor": "政治因素。",
+            "logistics_status": "timeout",
+        }
+        history = {
+            "last_7_days": {"anomaly_days": 2, "scored_days": 7},
+            "last_30_days": {"anomaly_days": 3, "scored_days": 25},
         }
         with (
             patch("mcp_conductor.servers.dify_api_server.sqlite3") as mock_sqlite,
@@ -238,7 +243,7 @@ class TestDetectAnomaly(unittest.TestCase):
             ) as mock_analyze,
         ):
             mock_conn = MagicMock()
-            mock_conn.execute.return_value.fetchone.return_value = fake_row
+            mock_conn.execute.return_value.fetchone.side_effect = [fake_row, (2, 7, 3, 25)]
             mock_conn.__enter__ = lambda s: mock_conn
             mock_conn.__exit__ = MagicMock(return_value=False)
             mock_sqlite.connect.return_value = mock_conn
@@ -260,6 +265,11 @@ class TestDetectAnomaly(unittest.TestCase):
         assert data["duration_direction"] == "HIGH"
         assert data["regime"] == "BLOCKAGE"
         assert "受阻或封锁" in data["conclusion"]
+        assert data["anomaly_history"] == history
+        assert data["logistics_status"] == "timeout"
+        assert "logistics_assessment" not in data
+        assert "近7天：异常2天（有检测结果7天）" in data["result"]
+        assert "天气因素。" in data["result"]
         mock_analyze.assert_called_once_with(
             "霍尔木兹海峡",
             "2026-04-16",
@@ -271,6 +281,7 @@ class TestDetectAnomaly(unittest.TestCase):
             duration_ratio_low=0.0,
             duration_ratio_high=0.5,
             regime="BLOCKAGE",
+            anomaly_history=history,
         )
 
 
@@ -379,6 +390,56 @@ def _create_test_db():
     )
     conn.commit()
     return conn
+
+
+def test_anomaly_reason_aggregates_history_and_renders_assessment():
+    assessment = {
+        "event_type": "疑似航道受阻",
+        "confidence": "medium",
+        "impact_scope": "regional",
+        "impact_summary": "延误可能传导到后续挂靠港。",
+        "evidence_limitations": "缺少完整通行时长记录。",
+        "recommendations": [
+            {"stakeholder": "carriers", "action": "核实管制公告。", "trigger": "持续出现排队时。"},
+        ],
+    }
+    analysis = {"logistics_status": "available", "logistics_assessment": assessment}
+    conn = _create_test_db()
+    try:
+        conn.executemany(
+            """INSERT INTO m_pipe_anomaly_roll_percentile
+               (location_type, pipe_name, date_id, anomaly_flag, duration_anomaly_flag)
+               VALUES (?, '马六甲海峡', ?, ?, ?)""",
+            [
+                ("pipe", 20240101, 1, None),  # Outside the 30-day window.
+                ("pipe", 20240102, 1, None),  # First day in the 30-day window.
+                ("pipe", 20240124, 0, None),  # Outside the 7-day window.
+                ("pipe", 20240125, 2, 1),     # First day in the 7-day window.
+                ("pipe", 20240126, 2, None),  # Unscorable.
+                ("port", 20240127, 1, 1),     # Same name, different location type.
+                ("pipe", 20240201, 1, 1),     # Future relative to the request.
+            ],
+        )
+        with (
+            patch("mcp_conductor.servers.dify_api_server.sqlite3.connect", return_value=conn),
+            patch("mcp_conductor.servers.dify_api_server.analyze_congestion", return_value=analysis),
+        ):
+            data = asyncio.run(analyze_anomaly_reason(QuestionRequest(
+                question='{"year":2024,"month":1,"day":31,"location":"马六甲海峡"}',
+            )))
+    finally:
+        conn.close()
+
+    assert data["anomaly_history"] == {
+        "last_7_days": {"anomaly_days": 2, "scored_days": 2},
+        "last_30_days": {"anomaly_days": 3, "scored_days": 4},
+    }
+    assert data["logistics_status"] == "available"
+    assert data["logistics_assessment"] == assessment
+    assert "全球航运影响" in data["result"]
+    assert "影响范围：区域" in data["result"]
+    assert "行业建议" in data["result"]
+    assert "船东和承运人" in data["result"]
 
 
 class TestDetectAnomalySql(unittest.TestCase):

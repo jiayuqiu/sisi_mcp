@@ -85,6 +85,7 @@ def test_analyze_congestion_retries_on_missing_sources_and_logs_result():
     with (
         patch("mcp_conductor.analyzer.congestion.DeepSeekClient", return_value=mock_client),
         patch("mcp_conductor.analyzer.congestion.save_to_log") as mock_save_log,
+        patch("mcp_conductor.analyzer.congestion.assess_logistics", return_value=("disabled", None)) as assess,
     ):
         result = analyze_congestion(
             "霍尔木兹海峡",
@@ -105,4 +106,11 @@ def test_analyze_congestion_retries_on_missing_sources_and_logs_result():
     assert result["weather_factor"] == "扩展后的天气因素详述。"
     assert result["political_factor"] == "扩展后的政治因素详述。"
     assert result["reasoning_content"] == "retry reasoning"
+    assert result["logistics_status"] == "disabled"
+    context, evidence = assess.call_args.args
+    assert context.pipe_name == "霍尔木兹海峡"
+    assert evidence["summary"] == result["summary"]
+    assert evidence["weather_factor"] == expanded_payload["weather_factor"]
+    assert evidence["political_factor"] == expanded_payload["political_factor"]
+    assert json.loads(evidence["sources"]) == retry_payload["sources"]
     mock_save_log.assert_called_once()
