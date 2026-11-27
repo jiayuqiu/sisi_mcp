@@ -9,7 +9,7 @@ dependencies:
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.18@ef52c8128cefe169e4ea882a8c7d92e6cf0bd4f7da75be644ab6b09a3dcfa4f4
+    marketplace_plugin_unique_identifier: langgenius/ollama:1.0.2@ef203a332d1b2b8952dbaa012be70be3e0a2d576b001489fb3b070efc970ffbe
     version: null
 kind: app
 version: 0.5.0
@@ -75,19 +75,6 @@ workflow:
       source: '1770528546254'
       sourceHandle: source
       target: '1770528175479'
-      targetHandle: target
-      type: custom
-      zIndex: 0
-    - data:
-        isInIteration: false
-        isInLoop: false
-        sourceType: code
-        targetType: answer
-      id: 1770528713574-source-answer-target
-      selected: false
-      source: '1770528713574'
-      sourceHandle: source
-      target: answer
       targetHandle: target
       type: custom
       zIndex: 0
@@ -207,17 +194,6 @@ workflow:
       zIndex: 0
     - data:
         isInLoop: false
-        sourceType: llm
-        targetType: answer
-      id: 1775445602881-source-answer-target
-      source: '1775445602881'
-      sourceHandle: source
-      target: answer
-      targetHandle: target
-      type: custom
-      zIndex: 0
-    - data:
-        isInLoop: false
         sourceType: if-else
         targetType: llm
       id: 1770528175479-1547faa2-b830-473e-bee8-15c74fadcaaa-1775446075083-target
@@ -261,11 +237,69 @@ workflow:
       type: custom
       zIndex: 0
     - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: tool
+      id: 1770528713574-source-1788352069085-target
+      source: '1770528713574'
+      sourceHandle: source
+      target: '1788352069085'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
+        targetType: answer
+      id: 1788352069085-source-answer-target
+      source: '1788352069085'
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
         isInLoop: false
         sourceType: llm
+        targetType: tool
+      id: 1775445602881-source-1788352122616-target
+      source: '1775445602881'
+      sourceHandle: source
+      target: '1788352122616'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
         targetType: answer
-      id: 1775446075083-source-answer-target
+      id: 1788352122616-source-answer-target
+      source: '1788352122616'
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: tool
+      id: 1775446075083-source-1788352170043-target
       source: '1775446075083'
+      sourceHandle: source
+      target: '1788352170043'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
+        targetType: answer
+      id: 1788352170043-source-answer-target
+      source: '1788352170043'
       sourceHandle: source
       target: answer
       targetHandle: target
@@ -296,10 +330,11 @@ workflow:
           variable_selector: []
         model:
           completion_params:
+            num_predict: 2048
             temperature: 0.1
           mode: chat
-          name: deepseek-chat
-          provider: langgenius/deepseek/deepseek
+          name: qwen3.5:4b
+          provider: langgenius/ollama/ollama
         prompt_template:
         - id: 8fd0f5bd-8f5b-4d46-82e5-5f11dc50b760
           role: system
@@ -368,11 +403,11 @@ workflow:
       height: 138
       id: answer
       position:
-        x: 2816
-        y: 84
+        x: 3297.833224947958
+        y: 27.741146282132107
       positionAbsolute:
-        x: 2816
-        y: 84
+        x: 3297.833224947958
+        y: 27.741146282132107
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -579,10 +614,10 @@ workflow:
       id: '1770528546254'
       position:
         x: 1388
-        y: 110
+        y: 108.35751953124998
       positionAbsolute:
         x: 1388
-        y: 110
+        y: 108.35751953124998
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -643,11 +678,11 @@ workflow:
       height: 79
       id: '1770528713574'
       position:
-        x: 2454
-        y: 79
+        x: 2472.2253702107973
+        y: 8.70766277506167
       positionAbsolute:
-        x: 2454
-        y: 79
+        x: 2472.2253702107973
+        y: 8.70766277506167
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -664,11 +699,14 @@ workflow:
         instructions: ''
         model:
           completion_params:
+            format: json
             max_tokens: 256
+            num_predict: 2048
             temperature: 0.1
+            think: false
           mode: chat
-          name: deepseek-chat
-          provider: langgenius/deepseek/deepseek
+          name: qwen3.5:4b
+          provider: langgenius/ollama/ollama
         query_variable_selector:
         - sys
         - query
@@ -707,11 +745,12 @@ workflow:
             size: 10
         model:
           completion_params:
-            frequency_penalty: 0.2
-            temperature: 0.6
+            num_predict: 2048
+            temperature: 0.1
+            think: false
           mode: chat
-          name: deepseek-chat
-          provider: langgenius/deepseek/deepseek
+          name: qwen3.5:4b
+          provider: langgenius/ollama/ollama
         prompt_template:
         - id: dc6ce8f5-0251-4044-a6fb-634914f92a4e
           role: system
@@ -719,8 +758,10 @@ workflow:
 
             你回答与船舶通航量、通行时长、拥堵、延误、绕行、封锁及相关原因分析有关的问题。
 
+            给出航运问题示例：2026年7月21日英吉利海峡是否发生了异常？
 
-            对于其他问题，请礼貌地说明你的专业范围，并引导用户提问正确的问题。
+
+            对于其他问题，请礼貌地说明你的专业范围，并引导用户提问正确的问题。问题需要有日期与地点信息，可以借鉴下文的实例。
 
 
             你可以回答的问题示例：
@@ -760,11 +801,11 @@ workflow:
       height: 101
       id: '1771638902207'
       position:
-        x: 1046
-        y: 274
+        x: 1055.8548828125001
+        y: 281
       positionAbsolute:
-        x: 1046
-        y: 274
+        x: 1055.8548828125001
+        y: 281
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -877,7 +918,7 @@ workflow:
         provider_id: 8f29ae57-f95e-48be-8697-e0b0d9955fbb
         provider_name: analyzeAnomaly
         provider_type: api
-        selected: false
+        selected: true
         title: analyzeAnomalyReason
         tool_configurations: {}
         tool_description: 深度分析交通异常原因，结合天气、新闻等信息给出详细解释
@@ -892,11 +933,11 @@ workflow:
       height: 51
       id: '1775300657540'
       position:
-        x: 2112
-        y: 93
+        x: 2127.947198934448
+        y: 8.70766277506167
       positionAbsolute:
-        x: 2112
-        y: 93
+        x: 2127.947198934448
+        y: 8.70766277506167
       selected: true
       sourcePosition: right
       targetPosition: left
@@ -908,10 +949,11 @@ workflow:
           variable_selector: []
         model:
           completion_params:
+            num_predict: 4096
             temperature: 0.3
           mode: chat
-          name: deepseek-chat
-          provider: langgenius/deepseek/deepseek
+          name: qwen3.5:4b
+          provider: langgenius/ollama/ollama
         prompt_template:
         - id: 87ce8a18-6467-4789-a78a-10615e4dbb94
           role: system
@@ -954,11 +996,11 @@ workflow:
       height: 87
       id: '1775445602881'
       position:
-        x: 2454
-        y: 238
+        x: 2472.2253702107973
+        y: 190.36806640625002
       positionAbsolute:
-        x: 2454
-        y: 238
+        x: 2472.2253702107973
+        y: 190.36806640625002
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -970,10 +1012,11 @@ workflow:
           variable_selector: []
         model:
           completion_params:
+            num_predict: 4096
             temperature: 0.7
           mode: chat
-          name: deepseek-chat
-          provider: langgenius/deepseek/deepseek
+          name: qwen3.5:4b
+          provider: langgenius/ollama/ollama
         prompt_template:
         - id: ba240e67-63bf-48d1-a163-555f6c413495
           role: system
@@ -1030,18 +1073,603 @@ workflow:
       height: 117
       id: '1775446075083'
       position:
-        x: 2092
-        y: 245
+        x: 2472.2253702107973
+        y: 361.9805109559811
       positionAbsolute:
-        x: 2092
-        y: 245
+        x: 2472.2253702107973
+        y: 361.9805109559811
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            ja_JP: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            pt_BR: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            zh_Hans: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          label:
+            en_US: question
+            ja_JP: question
+            pt_BR: question
+            zh_Hans: question
+          llm_description: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            ja_JP: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            pt_BR: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            zh_Hans: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            ja_JP: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            pt_BR: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            zh_Hans: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          label:
+            en_US: question_type
+            ja_JP: question_type
+            pt_BR: question_type
+            zh_Hans: question_type
+          llm_description: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          max: null
+          min: null
+          name: question_type
+          options: []
+          placeholder:
+            en_US: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            ja_JP: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            pt_BR: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            zh_Hans: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            ja_JP: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            pt_BR: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            zh_Hans: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          label:
+            en_US: content
+            ja_JP: content
+            pt_BR: content
+            zh_Hans: content
+          llm_description: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          max: null
+          min: null
+          name: content
+          options: []
+          placeholder:
+            en_US: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            ja_JP: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            pt_BR: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            zh_Hans: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 可选的推理过程文本
+            ja_JP: 可选的推理过程文本
+            pt_BR: 可选的推理过程文本
+            zh_Hans: 可选的推理过程文本
+          label:
+            en_US: reasoning_content
+            ja_JP: reasoning_content
+            pt_BR: reasoning_content
+            zh_Hans: reasoning_content
+          llm_description: 可选的推理过程文本
+          max: null
+          min: null
+          name: reasoning_content
+          options: []
+          placeholder:
+            en_US: 可选的推理过程文本
+            ja_JP: 可选的推理过程文本
+            pt_BR: 可选的推理过程文本
+            zh_Hans: 可选的推理过程文本
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            ja_JP: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            pt_BR: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            zh_Hans: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          label:
+            en_US: return_id
+            ja_JP: return_id
+            pt_BR: return_id
+            zh_Hans: return_id
+          llm_description: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          max: null
+          min: null
+          name: return_id
+          options: []
+          placeholder:
+            en_US: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            ja_JP: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            pt_BR: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            zh_Hans: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        params:
+          content: ''
+          question: ''
+          question_type: ''
+          reasoning_content: ''
+          return_id: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 43efc6ad-fcbb-42c1-9408-5ce2b520a33e
+        provider_name: WORKLOGSAVER
+        provider_type: api
+        selected: false
+        title: saveWorklog
+        tool_configurations: {}
+        tool_description: 将 NORMALSUMMARY 或 DATAISSUESUMMARY 节点的文本结果，连同原始问题一起写入 sisi.sqlite
+          的 log_agent_worklog 表。
+        tool_label: saveWorklog
+        tool_name: saveWorklog
+        tool_node_version: '2'
+        tool_parameters:
+          content:
+            type: mixed
+            value: '{{#1770528713574.formatted_output#}}'
+          question:
+            type: mixed
+            value: '{{#llm.structured_output#}}'
+          question_type:
+            type: mixed
+            value: weather_news
+          reasoning_content:
+            type: mixed
+            value: ''
+          return_id:
+            type: mixed
+            value: /
+        type: tool
+      height: 51
+      id: '1788352069085'
+      position:
+        x: 2792.1345703125
+        y: 8.70766277506167
+      positionAbsolute:
+        x: 2792.1345703125
+        y: 8.70766277506167
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            ja_JP: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            pt_BR: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            zh_Hans: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          label:
+            en_US: question
+            ja_JP: question
+            pt_BR: question
+            zh_Hans: question
+          llm_description: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            ja_JP: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            pt_BR: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            zh_Hans: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            ja_JP: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            pt_BR: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            zh_Hans: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          label:
+            en_US: question_type
+            ja_JP: question_type
+            pt_BR: question_type
+            zh_Hans: question_type
+          llm_description: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          max: null
+          min: null
+          name: question_type
+          options: []
+          placeholder:
+            en_US: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            ja_JP: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            pt_BR: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            zh_Hans: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            ja_JP: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            pt_BR: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            zh_Hans: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          label:
+            en_US: content
+            ja_JP: content
+            pt_BR: content
+            zh_Hans: content
+          llm_description: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          max: null
+          min: null
+          name: content
+          options: []
+          placeholder:
+            en_US: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            ja_JP: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            pt_BR: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            zh_Hans: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 可选的推理过程文本
+            ja_JP: 可选的推理过程文本
+            pt_BR: 可选的推理过程文本
+            zh_Hans: 可选的推理过程文本
+          label:
+            en_US: reasoning_content
+            ja_JP: reasoning_content
+            pt_BR: reasoning_content
+            zh_Hans: reasoning_content
+          llm_description: 可选的推理过程文本
+          max: null
+          min: null
+          name: reasoning_content
+          options: []
+          placeholder:
+            en_US: 可选的推理过程文本
+            ja_JP: 可选的推理过程文本
+            pt_BR: 可选的推理过程文本
+            zh_Hans: 可选的推理过程文本
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            ja_JP: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            pt_BR: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            zh_Hans: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          label:
+            en_US: return_id
+            ja_JP: return_id
+            pt_BR: return_id
+            zh_Hans: return_id
+          llm_description: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          max: null
+          min: null
+          name: return_id
+          options: []
+          placeholder:
+            en_US: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            ja_JP: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            pt_BR: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            zh_Hans: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        params:
+          content: ''
+          question: ''
+          question_type: ''
+          reasoning_content: ''
+          return_id: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 43efc6ad-fcbb-42c1-9408-5ce2b520a33e
+        provider_name: WORKLOGSAVER
+        provider_type: api
+        selected: false
+        title: saveWorklog
+        tool_configurations: {}
+        tool_description: 将 NORMALSUMMARY 或 DATAISSUESUMMARY 节点的文本结果，连同原始问题一起写入 sisi.sqlite
+          的 log_agent_worklog 表。
+        tool_label: saveWorklog
+        tool_name: saveWorklog
+        tool_node_version: '2'
+        tool_parameters:
+          content:
+            type: mixed
+            value: '{{#1775445602881.text#}}'
+          question:
+            type: mixed
+            value: '{{#llm.structured_output#}}'
+          question_type:
+            type: mixed
+            value: weather_news
+          reasoning_content:
+            type: mixed
+            value: '{{#1775445602881.reasoning_content#}}'
+          return_id:
+            type: mixed
+            value: ''
+        type: tool
+      height: 51
+      id: '1788352122616'
+      position:
+        x: 2792.1345703125
+        y: 190.36806640625002
+      positionAbsolute:
+        x: 2792.1345703125
+        y: 190.36806640625002
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            ja_JP: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            pt_BR: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            zh_Hans: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          label:
+            en_US: question
+            ja_JP: question
+            pt_BR: question
+            zh_Hans: question
+          llm_description: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          max: null
+          min: null
+          name: question
+          options: []
+          placeholder:
+            en_US: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            ja_JP: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            pt_BR: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+            zh_Hans: 结构化问题 JSON 字符串，需包含 year/month/day/location 字段，例如 {"year":"2026","month":"03","day":"31","location":"霍尔木兹海峡","question":"是"}
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            ja_JP: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            pt_BR: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            zh_Hans: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          label:
+            en_US: question_type
+            ja_JP: question_type
+            pt_BR: question_type
+            zh_Hans: question_type
+          llm_description: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          max: null
+          min: null
+          name: question_type
+          options: []
+          placeholder:
+            en_US: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            ja_JP: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            pt_BR: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+            zh_Hans: 日志条目的类型标签，例如 normal_summary 或 data_issue_summary
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            ja_JP: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            pt_BR: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            zh_Hans: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          label:
+            en_US: content
+            ja_JP: content
+            pt_BR: content
+            zh_Hans: content
+          llm_description: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          max: null
+          min: null
+          name: content
+          options: []
+          placeholder:
+            en_US: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            ja_JP: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            pt_BR: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+            zh_Hans: LLM 节点生成的正文文本（NORMALSUMMARY.text 或 DATAISSUESUMMARY.text）
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 可选的推理过程文本
+            ja_JP: 可选的推理过程文本
+            pt_BR: 可选的推理过程文本
+            zh_Hans: 可选的推理过程文本
+          label:
+            en_US: reasoning_content
+            ja_JP: reasoning_content
+            pt_BR: reasoning_content
+            zh_Hans: reasoning_content
+          llm_description: 可选的推理过程文本
+          max: null
+          min: null
+          name: reasoning_content
+          options: []
+          placeholder:
+            en_US: 可选的推理过程文本
+            ja_JP: 可选的推理过程文本
+            pt_BR: 可选的推理过程文本
+            zh_Hans: 可选的推理过程文本
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            ja_JP: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            pt_BR: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            zh_Hans: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          label:
+            en_US: return_id
+            ja_JP: return_id
+            pt_BR: return_id
+            zh_Hans: return_id
+          llm_description: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          max: null
+          min: null
+          name: return_id
+          options: []
+          placeholder:
+            en_US: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            ja_JP: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            pt_BR: 可选的外部 ID；省略时后端生成 dify-<uuid>
+            zh_Hans: 可选的外部 ID；省略时后端生成 dify-<uuid>
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        params:
+          content: ''
+          question: ''
+          question_type: ''
+          reasoning_content: ''
+          return_id: ''
+        plugin_id: null
+        plugin_unique_identifier: null
+        provider_icon:
+          background: '#FEF7C3'
+          content: 🕵️
+        provider_id: 43efc6ad-fcbb-42c1-9408-5ce2b520a33e
+        provider_name: WORKLOGSAVER
+        provider_type: api
+        selected: false
+        title: saveWorklog
+        tool_configurations: {}
+        tool_description: 将 NORMALSUMMARY 或 DATAISSUESUMMARY 节点的文本结果，连同原始问题一起写入 sisi.sqlite
+          的 log_agent_worklog 表。
+        tool_label: saveWorklog
+        tool_name: saveWorklog
+        tool_node_version: '2'
+        tool_parameters:
+          content:
+            type: mixed
+            value: '{{#1775446075083.text#}}'
+          question:
+            type: mixed
+            value: '{{#llm.structured_output#}}'
+          question_type:
+            type: mixed
+            value: data_issue_summary
+          reasoning_content:
+            type: mixed
+            value: '{{#1775446075083.reasoning_content#}}'
+          return_id:
+            type: mixed
+            value: null
+        type: tool
+      height: 51
+      id: '1788352170043'
+      position:
+        x: 2801.9894531249997
+        y: 361.9805109559811
+      positionAbsolute:
+        x: 2801.9894531249997
+        y: 361.9805109559811
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     viewport:
-      x: 389.3162219255163
-      y: 395.22488325530435
-      zoom: 0.3945354310283908
+      x: 67.90596850752468
+      y: 472.23706410805124
+      zoom: 0.5293889417883602
   rag_pipeline_variables: []

@@ -179,7 +179,6 @@ def analyze_congestion(
     duration_direction: str = "UNKNOWN",
     duration_ratio_low: float | None = None,
     duration_ratio_high: float | None = None,
-    llm_client: str | None = None,
     regime: str = "UNKNOWN",
     *,
     anomaly_history: AnomalyHistory | None = None,
@@ -199,7 +198,10 @@ def analyze_congestion(
         regime=regime,
         anomaly_history=anomaly_history,
     )
+    # request deepseek for summarizing data from sqlite, political news and weather.
     evidence = _collect_deepseek_evidence(context)
+
+    # reqeust logsitics llm model for the effect and suggestionss
     status, assessment = assess_logistics(context, evidence, started_at=started_at)
     result: CongestionAnalysis = {**evidence, "logistics_status": status}
     if assessment is not None:

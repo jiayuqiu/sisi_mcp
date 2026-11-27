@@ -85,7 +85,7 @@ Project path: /c/Users/qiuji/codebase/dify
 - `better-sqlite3` is a native Node.js addon — it must be compiled inside the Docker container (Linux), NOT copied from the host `node_modules` (Windows). The `.dockerignore` at the project root excludes `frontend_nextjs/node_modules` and `frontend_nextjs/.next` to ensure this. Never remove those entries.
 - Next.js frontend env vars: `DIFY_API_KEY`, `DIFY_CHATFLOW_URL`, `SQLITE_DB_PATH` (defaults to `../data/sisi.sqlite`). In Docker, `SQLITE_DB_PATH=/app/data/sisi.sqlite` with the `../data` volume mounted.
 - Git:
-  - DON'T track `docs/plans`, `dify/`
+  - DON'T git track `docs/plans`, `dify/`
 
 ## Database Schema (`data/sisi.sqlite`)
 
