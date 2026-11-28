@@ -9,7 +9,7 @@
 - depend on: BCI Data API completion
 - command:
 ```bash
-$ uv run python -m mcp_conductor.entry.main_sync_bci_data   --start-date 2026-10-15   --end-date 2026-10-29
+$ uv run python -m mcp_conductor.entry.main_sync_bci_data   --start-date 2026-01-01   --end-date 2026-10-29
 ```
 
 ### 1.2 main_traffic_detect.py
@@ -42,6 +42,7 @@ $ uv run python -m mcp_conductor.entry.main_trigger_dify_chatflow   --start-date
 - command:
 ```bash
 $ uv run python -m mcp_conductor.entry.main_fit_model   --location_type pipe   --metric duration   --as_of 20261015
+$ uv run python -m mcp_conductor.entry.main_fit_model   --location_type pipe   --metric ship_cnt   --as_of 20261015
 ```
 
 ## 2.2 main_rebuild_detection
